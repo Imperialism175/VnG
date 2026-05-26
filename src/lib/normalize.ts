@@ -1,0 +1,211 @@
+import type {
+  Character,
+  ChatMessage,
+  CounterField,
+  Encounter,
+  Player,
+  RollEvent,
+  Room,
+  RoomMusic,
+  RoomPoll,
+  RoomTheme,
+  ScreenMessage,
+  StatField,
+  TextField,
+} from '@/types'
+import { parseRoomExtras } from '@/lib/roomExtras'
+
+export interface RoomPublicState {
+  room: {
+    id: string
+    name: string
+    host_id: string
+    gm_id: string
+    created_at?: string
+  }
+  players: Player[]
+  characters: Character[]
+  roll_events: RollEvent[]
+  chat_messages: ChatMessage[]
+  active_encounter: Encounter | null
+  hands_raised?: string[]
+  dice_allowed?: string[]
+  room_theme?: RoomTheme
+  player_themes?: Record<string, RoomTheme>
+  music?: RoomMusic
+  active_poll?: RoomPoll | null
+  screen_message?: ScreenMessage | null
+}
+
+export type ServerMessage =
+  | { type: 'STATE_SYNC'; state: RoomPublicState; your_gm?: boolean }
+  | { type: 'CHARACTER_UPDATED'; character: Character }
+  | { type: 'CHARACTER_DELETED'; player_id: string }
+  | { type: 'CREATE_NPC_CHARACTER'; name: string }
+  | { type: 'DELETE_NPC_CHARACTER'; player_id: string }
+  | { type: 'DICE_ROLL'; event: RollEvent }
+  | { type: 'CHAT_MESSAGE'; message: ChatMessage }
+  | { type: 'CHANGE_GM'; gm_id: string; state: RoomPublicState }
+  | { type: 'ENCOUNTER_UPDATE'; encounter: Encounter | null }
+  | { type: 'ROOM_EXTRAS_UPDATE'; extras: Record<string, unknown> }
+  | { type: 'PRESENCE_UPDATE'; hands_raised: string[]; dice_allowed: string[] }
+  | { type: 'ERROR'; message: string }
+
+export type ClientMessage =
+  | { type: 'UPDATE_CHARACTER'; character: Character }
+  | { type: 'CREATE_NPC_CHARACTER'; name: string }
+  | { type: 'DELETE_NPC_CHARACTER'; player_id: string }
+  | { type: 'DICE_ROLL'; expression?: string; count?: number; sides?: number; modifier?: number }
+  | { type: 'DICE_REROLL_INSPIRED'; expression?: string; count?: number; sides?: number; modifier?: number }
+  | { type: 'CHAT_MESSAGE'; text: string }
+  | { type: 'CHANGE_GM'; new_gm_id: string }
+  | { type: 'SHOW_ENCOUNTER'; encounter: Partial<Encounter> }
+  | { type: 'UPDATE_ENCOUNTER'; encounter: Partial<Encounter> }
+  | { type: 'HIDE_ENCOUNTER' }
+  | { type: 'SET_THEME'; theme: RoomTheme; target_player_id?: string | null; clear_player_overrides?: boolean }
+  | { type: 'SET_PLAYER_THEME'; theme: RoomTheme }
+  | { type: 'CLEAR_MY_THEME' }
+  | { type: 'CLEAR_PLAYER_THEME'; target_player_id: string }
+  | { type: 'SET_MUSIC'; url?: string | null; playing?: boolean }
+  | { type: 'START_POLL'; question: string; options: string[] }
+  | { type: 'CAST_VOTE'; option_id: string }
+  | { type: 'END_POLL' }
+  | { type: 'CLEAR_POLL' }
+  | { type: 'SHOW_SCREEN_MESSAGE'; title?: string; text: string; target_player_id?: string | null }
+  | { type: 'DISMISS_SCREEN_MESSAGE' }
+  | { type: 'SET_HALL_OF_FAME'; hall_of_fame: { title: string; entries: { id: string; name: string; label?: string }[] } }
+  | { type: 'SET_STAGE_FX'; darkness: number; flashlights_enabled_for?: string[] }
+  | { type: 'SET_ALLOW_PLAYER_THEME_EDITING'; enabled: boolean }
+  | { type: 'SET_HAND_RAISED'; raised: boolean }
+  | { type: 'SET_DICE_PERMISSION'; player_id: string; allowed: boolean }
+
+export function normalizeCharacter(raw: Record<string, unknown>): Character {
+  return {
+    id: raw.id as string,
+    room_id: (raw.room_id ?? raw.roomId) as string,
+    player_id: (raw.player_id ?? raw.playerId) as string,
+    player_name: (raw.player_name ?? raw.playerName) as string,
+    name: (raw.name as string) ?? '',
+    sheet_preset_id: (raw.sheet_preset_id ?? raw.sheetPresetId ?? null) as string | null,
+    class_status: (raw.class_status ?? raw.classStatus ?? '') as string,
+    description: (raw.description as string) ?? '',
+    text_fields: (raw.text_fields ?? raw.textFields ?? []) as TextField[],
+    stats: (raw.stats ?? []) as StatField[],
+    counters: (raw.counters ?? []) as CounterField[],
+    is_npc: Boolean(raw.is_npc ?? raw.isNpc) || String(raw.player_id ?? raw.playerId ?? '').startsWith('npc-'),
+    in_party: Boolean(raw.in_party ?? raw.inParty),
+    npc_visibility:
+      (raw.npc_visibility ?? raw.npcVisibility) === 'full'
+        ? 'full'
+        : (raw.npc_visibility ?? raw.npcVisibility) === 'restricted'
+          ? 'restricted'
+          : undefined,
+    updated_at: (raw.updated_at ?? raw.updatedAt) as string | undefined,
+  }
+}
+
+export function normalizeRoom(raw: RoomPublicState['room']): Room {
+  return {
+    id: raw.id,
+    name: raw.name,
+    gm_id: raw.gm_id,
+    host_id: raw.host_id,
+    created_at: raw.created_at,
+  }
+}
+
+export function normalizeRollEvent(raw: Record<string, unknown>): RollEvent {
+  return {
+    id: raw.id as string,
+    room_id: (raw.room_id ?? raw.roomId) as string,
+    player_id: (raw.player_id ?? raw.playerId) as string,
+    player_name: (raw.player_name ?? raw.playerName) as string,
+    player_is_gm: Boolean(raw.player_is_gm ?? raw.playerIsGm),
+    expression: raw.expression as string,
+    total: raw.total as number,
+    details: (raw.details as string) ?? '',
+    message: (raw.message as string) ?? '',
+    created_at: (raw.created_at ?? raw.createdAt) as string,
+    rolls: Array.isArray(raw.rolls) ? (raw.rolls as number[]) : undefined,
+    modifier: typeof raw.modifier === 'number' ? raw.modifier : undefined,
+    sides: typeof raw.sides === 'number' ? raw.sides : null,
+  }
+}
+
+export function normalizeChatMessage(raw: Record<string, unknown>): ChatMessage {
+  return {
+    id: raw.id as string,
+    room_id: (raw.room_id ?? raw.roomId) as string,
+    player_id: (raw.player_id ?? raw.playerId) as string,
+    player_name: (raw.player_name ?? raw.playerName) as string,
+    text: raw.text as string,
+    created_at: (raw.created_at ?? raw.createdAt) as string,
+  }
+}
+
+export function normalizeEncounter(raw: Record<string, unknown> | null): Encounter | null {
+  if (!raw) return null
+
+  let enemies = (raw.enemies ?? []) as Encounter['enemies']
+  if (!Array.isArray(enemies) || enemies.length === 0) {
+    const hp = (raw.enemy_hp ?? raw.enemyHp ?? null) as number | null
+    const hpMax = (raw.enemy_hp_max ?? raw.enemyHpMax ?? null) as number | null
+    if (hp !== null || hpMax !== null || raw.title) {
+      enemies = [
+        {
+          id: 'legacy',
+          name: 'Противник',
+          hp,
+          hp_max: hpMax,
+          armor: '',
+          notes: '',
+        },
+      ]
+    }
+  }
+
+  const first = enemies[0]
+  return {
+    id: raw.id as string,
+    room_id: (raw.room_id ?? raw.roomId) as string,
+    title: (raw.title as string) ?? '',
+    subtitle: (raw.subtitle as string) ?? '',
+    description: (raw.description as string) ?? '',
+    mood: ((raw.mood as string) ?? '') as Encounter['mood'],
+    image_url: (raw.image_url ?? raw.imageUrl ?? null) as string | null,
+    enemies,
+    objectives: (raw.objectives as string) ?? '',
+    gm_notes: (raw.gm_notes ?? raw.gmNotes ?? '') as string,
+    round: typeof raw.round === 'number' ? raw.round : 1,
+    enemy_hp: first?.hp ?? (raw.enemy_hp ?? raw.enemyHp ?? null) as number | null,
+    enemy_hp_max: first?.hp_max ?? (raw.enemy_hp_max ?? raw.enemyHpMax ?? null) as number | null,
+    is_active: (raw.is_active ?? raw.isActive ?? false) as boolean,
+  }
+}
+
+export function parsePresence(raw: {
+  hands_raised?: string[]
+  dice_allowed?: string[]
+}): { handsRaised: string[]; diceAllowed: string[] } {
+  return {
+    handsRaised: Array.isArray(raw.hands_raised) ? raw.hands_raised : [],
+    diceAllowed: Array.isArray(raw.dice_allowed) ? raw.dice_allowed : [],
+  }
+}
+
+export function applyPublicState(state: RoomPublicState) {
+  return {
+    room: normalizeRoom(state.room),
+    players: state.players as Player[],
+    characters: state.characters.map((c) => normalizeCharacter(c as unknown as Record<string, unknown>)),
+    rollEvents: state.roll_events.map((e) => normalizeRollEvent(e as unknown as Record<string, unknown>)),
+    chatMessages: (state.chat_messages ?? []).map((m) =>
+      normalizeChatMessage(m as unknown as Record<string, unknown>)
+    ),
+    activeEncounter: state.active_encounter
+      ? normalizeEncounter(state.active_encounter as unknown as Record<string, unknown>)
+      : null,
+    presence: parsePresence(state),
+    extras: parseRoomExtras(state as unknown as Record<string, unknown>),
+  }
+}

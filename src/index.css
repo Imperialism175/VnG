@@ -1,0 +1,283 @@
+@import "tailwindcss";
+
+@theme {
+  /* Defaults (lobby); in room applyThemeVars overrides --color-vng-* on .vng-room-shell */
+  --color-vng-bg: #000000;
+  --color-vng-surface: #000000;
+  --color-vng-elevated: #000000;
+  --color-vng-border: #006600;
+  --color-vng-muted: #006600;
+  --color-vng-text: #33ff33;
+  --color-vng-blue: #33ff33;
+  --color-vng-blue-dim: #006600;
+  --color-vng-blue-soft: #33ff33;
+  --color-vng-amber: #33ff33;
+  --color-vng-amber-dim: #006600;
+  --color-vng-gold: #33ff33;
+  --color-vng-purple: #33ff33;
+  --color-vng-purple-dim: #006600;
+  --color-vng-green: #33ff33;
+  --color-vng-danger: #33ff33;
+  --font-vng: "Courier New", Consolas, "Fira Code", monospace;
+  --font-vng-display: "Courier New", Consolas, "Fira Code", monospace;
+  --font-vng-retro: "Courier New", Consolas, monospace;
+  --font-vng-retro-mono: "Courier New", Consolas, monospace;
+  --font-vng-mono: "Courier New", Consolas, "Fira Code", monospace;
+  --color-vng-retro-bg: #000000;
+  --color-vng-retro-panel: #000000;
+  --color-vng-retro-border: #33ff33;
+  --color-vng-retro-phosphor: #33ff33;
+  --color-vng-retro-gold: #33ff33;
+  --color-vng-retro-dim: #006600;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-vng-mono);
+  background-color: var(--vng-dos-bg, #000000);
+  color: var(--vng-dos-fg, #33ff33);
+}
+
+.vng-page {
+  min-height: 100%;
+}
+
+.vng-room-shell,
+.vng-retro-shell {
+  background-color: var(--vng-dos-bg, #000000);
+}
+
+@media (min-width: 1024px) {
+  .vng-room-shell {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+}
+
+.vng-mono {
+  font-family: var(--font-vng-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Structural — colors follow room theme vars when inside .vng-room-shell */
+.vng-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--vng-dos-fg, #33ff33);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-panel-header {
+  border-bottom: 1px solid var(--vng-dos-muted, #006600);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-card {
+  border: 1px solid var(--vng-dos-fg, #33ff33);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-dice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.25rem;
+  border: 1px solid var(--vng-dos-muted, #006600);
+  background: var(--vng-dos-bg, #000000);
+  color: var(--vng-dos-muted, #006600);
+  cursor: pointer;
+}
+
+.vng-dice-btn--active {
+  border-color: var(--vng-dos-fg, #33ff33);
+  color: var(--vng-dos-fg, #33ff33);
+}
+
+.vng-dice-readout {
+  text-align: center;
+  border-top: 1px solid var(--vng-dos-muted, #006600);
+  border-bottom: 1px solid var(--vng-dos-muted, #006600);
+  padding: 0.35rem 0;
+}
+
+.vng-stat-tile {
+  position: relative;
+  padding: 0.5rem;
+  border: 1px solid var(--vng-dos-muted, #006600);
+  background: var(--vng-dos-bg, #000000);
+  text-align: center;
+}
+
+.vng-stat-tile__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0 auto 0.35rem;
+  border: 1px solid var(--vng-dos-muted, #006600);
+  color: var(--vng-dos-fg, #33ff33);
+}
+
+.vng-counter-block {
+  padding: 0.5rem;
+  border: 1px solid var(--vng-dos-muted, #006600);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-feed-scroll {
+  font-family: var(--font-vng-mono);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.vng-feed-roll,
+.vng-feed-chat {
+  padding: 0.25rem 0.35rem;
+  border-left: 1px solid var(--vng-dos-muted, #006600);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-terminal-line__body {
+  display: flex;
+  gap: 0.35rem;
+  align-items: flex-start;
+  margin: 0;
+}
+
+.vng-roll-total {
+  font-family: var(--font-vng-mono);
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-top: 0.25rem;
+  padding-left: 0;
+}
+
+.vng-hp-text {
+  font-family: var(--font-vng-mono);
+  font-size: 0.8125rem;
+}
+
+.vng-dice-arena {
+  padding: 0.5rem;
+  border: 1px dashed var(--vng-dos-muted, #006600);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-dice-arena__faces {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.vng-die-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--vng-dos-fg, #33ff33);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-die-face__value {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.vng-retro-header {
+  border-bottom: 1px solid var(--vng-dos-fg, #33ff33);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-retro-tabbar {
+  border-top: 1px solid var(--vng-dos-fg, #33ff33);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-retro-tab {
+  color: var(--vng-dos-muted, #006600);
+  border-top: 1px solid transparent;
+}
+
+.vng-retro-tab--active {
+  color: var(--vng-dos-bg, #000000);
+  background: var(--vng-dos-fg, #33ff33);
+  border-top-color: var(--vng-dos-fg, #33ff33);
+}
+
+.vng-retro-tab__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.vng-gm-stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.vng-arcade-hud {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--vng-dos-fg, #33ff33);
+  background: var(--vng-dos-bg, #000000);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.vng-arcade-hud--banner {
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 0.35rem;
+}
+
+.vng-retro-panel {
+  border: 1px solid var(--vng-dos-fg, #33ff33);
+  background: var(--vng-dos-bg, #000000);
+}
+
+.vng-retro-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--vng-dos-muted, #006600);
+  font-size: 0.8125rem;
+  color: var(--vng-dos-fg, #33ff33);
+}
+
+.vng-retro-input {
+  border: 1px solid var(--vng-dos-muted, #006600);
+  background: var(--vng-dos-bg, #000000);
+  color: var(--vng-dos-fg, #33ff33);
+  padding: 0.2rem 0.35rem;
+  font-family: inherit;
+}
+
+.vng-retro-input::placeholder {
+  color: var(--vng-dos-muted, #006600);
+  opacity: 1;
+}
+
+.vng-retro-title {
+  color: var(--vng-dos-fg, #33ff33);
+  font-weight: 700;
+  text-transform: uppercase;
+}

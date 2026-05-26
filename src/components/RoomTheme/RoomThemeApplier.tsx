@@ -1,0 +1,75 @@
+import { useEffect, useRef, useState } from 'react'
+import type { RoomStageFx, RoomTheme } from '@/types'
+import { applyThemeVars } from '@/lib/theme'
+
+interface RoomThemeApplierProps {
+  theme: RoomTheme
+  stageFx?: RoomStageFx
+  viewerPlayerId?: string
+  viewerIsGm?: boolean
+  children: React.ReactNode
+}
+
+export function RoomThemeApplier({
+  theme,
+  stageFx,
+  viewerPlayerId,
+  viewerIsGm,
+  children,
+}: RoomThemeApplierProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pointer, setPointer] = useState({ x: 50, y: 50 })
+
+  useEffect(() => {
+    if (ref.current) applyThemeVars(ref.current, theme)
+  }, [theme.blue, theme.gold, theme.bg])
+
+  const flashlightEnabled = Boolean(
+    !viewerIsGm &&
+    viewerPlayerId &&
+    stageFx?.flashlightsEnabledFor?.includes(viewerPlayerId)
+  )
+  const darknessOpacity = Math.max(0, Math.min(1, (100 - (stageFx?.darkness ?? 100)) / 100))
+  const gmMonochromeAmount = viewerIsGm ? darknessOpacity : 0
+
+  return (
+    <div
+      ref={ref}
+      className="vng-room-shell vng-retro-shell vng-page flex flex-col w-full max-lg:min-h-full lg:h-dvh lg:max-h-dvh lg:overflow-hidden"
+      style={{
+        ['--vng-stage-light' as string]: String(stageFx?.darkness ?? 100),
+      }}
+      onMouseMove={(e) => {
+        if (!flashlightEnabled) return
+        const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+        if (!rect.width || !rect.height) return
+        const x = ((e.clientX - rect.left) / rect.width) * 100
+        const y = ((e.clientY - rect.top) / rect.height) * 100
+        setPointer({ x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) })
+      }}
+    >
+      <div
+        className="relative z-[1] flex flex-col min-h-0 flex-1"
+        style={viewerIsGm ? { filter: `grayscale(${gmMonochromeAmount})` } : undefined}
+      >
+        {children}
+      </div>
+      <div
+        className="vng-stage-dark-overlay"
+        style={
+          viewerIsGm
+            ? { opacity: 0 }
+            : flashlightEnabled
+            ? {
+                opacity: 1,
+                background: `radial-gradient(circle at ${pointer.x}% ${pointer.y}%, rgba(0,0,0,0) 0, rgba(0,0,0,0.2) 10%, rgba(0,0,0,${Math.min(
+                  0.95,
+                  darknessOpacity
+                )}) 24%, rgba(0,0,0,${Math.min(0.98, darknessOpacity + 0.08)}) 100%)`,
+              }
+            : { opacity: darknessOpacity }
+        }
+      />
+    </div>
+  )
+}

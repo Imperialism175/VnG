@@ -1,0 +1,1713 @@
+/**
+ * MS-DOS terminal theme — colors via CSS vars set in applyThemeVars (.vng-room-shell)
+ */
+
+/* Плавная смена палитры (интерполяция custom properties) */
+@property --vng-dos-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #000000;
+}
+
+@property --vng-dos-fg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #33ff33;
+}
+
+@property --vng-dos-accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #33ff33;
+}
+
+@property --vng-dos-muted {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #006600;
+}
+
+@property --vng-dos-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #006600;
+}
+
+@property --color-vng-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #000000;
+}
+
+@property --color-vng-text {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #33ff33;
+}
+
+@property --color-vng-muted {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #006600;
+}
+
+@property --color-vng-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #006600;
+}
+
+@property --color-vng-blue {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #33ff33;
+}
+
+@property --color-vng-amber {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #33ff33;
+}
+
+.vng-room-shell {
+  --vng-dos-bg: #000000;
+  --vng-dos-fg: #33ff33;
+  --vng-dos-accent: #33ff33;
+  --vng-dos-muted: #006600;
+  --vng-dos-border: #006600;
+
+  --vng-theme-transition-duration: 0.55s;
+  --vng-theme-transition-ease: ease;
+
+  transition:
+    --vng-dos-bg var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --vng-dos-fg var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --vng-dos-accent var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --vng-dos-muted var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --vng-dos-border var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-bg var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-surface var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-elevated var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-retro-bg var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-retro-panel var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-text var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-blue var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-blue-soft var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-blue-dim var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-amber var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-amber-dim var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-gold var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-purple var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-purple-dim var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-green var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-danger var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-muted var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-border var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-retro-border var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-retro-phosphor var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-retro-gold var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    --color-vng-retro-dim var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    background-color var(--vng-theme-transition-duration) var(--vng-theme-transition-ease),
+    color var(--vng-theme-transition-duration) var(--vng-theme-transition-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vng-room-shell {
+    --vng-theme-transition-duration: 0.01ms;
+  }
+}
+
+/* Быстрые hover-эффекты поверх плавной темы */
+.vng-room-shell .vng-tui-btn,
+.vng-room-shell .vng-dice-stepper__btn,
+.vng-room-shell .vng-retro-btn,
+.vng-room-shell .vng-retro-icon-btn,
+.vng-room-shell .vng-retro-tab,
+.vng-room-shell .vng-dice-btn {
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.12s ease;
+}
+
+.vng-room-shell .vng-die-visual {
+  transition:
+    left 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vng-room-shell .vng-dice-throw-pit--rolling .vng-die-visual {
+  transition:
+    left 0.08s linear,
+    top 0.08s linear,
+    transform 0.08s linear;
+}
+
+@keyframes vng-dos-blink {
+  0%,
+  49% {
+    opacity: 1;
+    color: var(--vng-dos-accent);
+    background: var(--vng-dos-bg);
+  }
+  50%,
+  100% {
+    opacity: 1;
+    color: var(--vng-dos-bg);
+    background: var(--vng-dos-accent);
+  }
+}
+
+@keyframes vng-dos-cursor {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Terminal aesthetic inside room shell */
+.vng-room-shell,
+.vng-retro-shell {
+  background: var(--vng-dos-bg) !important;
+  background-image: none !important;
+  color: var(--vng-dos-fg) !important;
+  font-family: "Courier New", Consolas, "Fira Code", monospace !important;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+.vng-retro-shell::after {
+  display: none !important;
+}
+
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Kill glow utilities */
+.vng-glow-amber,
+.vng-glow-cyan,
+.vng-glow-phosphor,
+.vng-glow-purple,
+.vng-glow-danger,
+.vng-display {
+  text-shadow: none !important;
+  font-family: "Courier New", Consolas, "Fira Code", monospace !important;
+}
+
+/* ── HUD / header ── */
+.vng-retro-header,
+.vng-dos-hud {
+  border-bottom: 1px solid var(--vng-dos-fg) !important;
+  background: var(--vng-dos-bg) !important;
+  min-height: auto !important;
+}
+
+.vng-dos-hud__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.vng-dos-hud__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  min-height: 1.4rem;
+  padding: 0.1rem 0 !important;
+}
+
+.vng-dos-hud__row--primary {
+  border-bottom: 1px solid var(--vng-dos-muted);
+  padding-bottom: 0.25rem !important;
+  margin-bottom: 0.15rem;
+}
+
+.vng-dos-hud__brand {
+  font-weight: bold;
+  color: var(--vng-dos-fg);
+  letter-spacing: 0.06em;
+}
+
+.vng-dos-hud__sep {
+  color: var(--vng-dos-muted);
+  user-select: none;
+}
+
+.vng-dos-hud__pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.vng-dos-hud__pair--timer .vng-dos-hud__timer {
+  font-weight: bold;
+  color: var(--vng-dos-accent);
+  letter-spacing: 0.05em;
+}
+
+.vng-dos-hud__label {
+  color: var(--vng-dos-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.vng-dos-hud__value {
+  color: var(--vng-dos-fg);
+  text-transform: none;
+}
+
+.vng-dos-hud__status--ok {
+  color: var(--vng-dos-fg);
+}
+
+.vng-dos-hud__status--err {
+  color: var(--vng-dos-fg);
+  animation: vng-dos-blink 0.8s step-end infinite;
+}
+
+.vng-retro-tab__label {
+  font-size: 0.6875rem !important;
+  letter-spacing: 0.03em;
+}
+
+/* ── Panels (box-drawn) ── */
+.vng-panel,
+.vng-card,
+.vng-retro-panel,
+.vng-terminal-panel,
+.vng-counter-block {
+  border: 1px solid var(--vng-dos-fg) !important;
+  background: color-mix(in srgb, var(--vng-dos-bg) 72%, transparent) !important;
+  backdrop-filter: blur(2.5px);
+}
+
+.vng-panel-header,
+.vng-retro-panel__hero,
+.vng-terminal-panel .vng-panel-header {
+  border-bottom: 1px solid var(--vng-dos-muted) !important;
+  background: color-mix(in srgb, var(--vng-dos-bg) 78%, transparent) !important;
+  padding: 0.35rem 0.5rem !important;
+}
+
+.vng-panel-header h2,
+.vng-terminal-panel .vng-panel-header h2 {
+  color: var(--vng-dos-fg) !important;
+  font-size: 0.8125rem !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vng-panel-header [class*="text-vng-amber"],
+.vng-panel-header svg {
+  color: var(--vng-dos-fg) !important;
+}
+
+/* ── TUI buttons ── */
+.vng-tui-btn,
+button.vng-roll-cta,
+button.vng-btn-arcade,
+button.vng-btn-secondary-arcade,
+button.vng-btn-ghost-arcade {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.35rem !important;
+  margin: 0;
+  border: none !important;
+  background: var(--vng-dos-bg) !important;
+  color: var(--vng-dos-fg) !important;
+  font-family: inherit !important;
+  font-size: 0.8125rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.vng-tui-btn::before {
+  content: "[ ";
+  color: var(--vng-dos-muted);
+}
+
+.vng-tui-btn::after {
+  content: " ]";
+  color: var(--vng-dos-muted);
+}
+
+.vng-tui-btn:hover:not(:disabled),
+.vng-tui-btn:focus-visible:not(:disabled),
+button.vng-roll-cta:hover:not(:disabled),
+button.vng-btn-arcade:hover:not(:disabled):not(.vng-btn-ghost-arcade) {
+  background: var(--vng-dos-fg) !important;
+  color: var(--vng-dos-bg) !important;
+}
+
+.vng-tui-btn:hover:not(:disabled)::before,
+.vng-tui-btn:hover:not(:disabled)::after,
+button.vng-roll-cta:hover:not(:disabled)::before,
+button.vng-roll-cta:hover:not(:disabled)::after {
+  color: var(--vng-dos-bg) !important;
+}
+
+.vng-tui-btn:active:not(:disabled),
+button.vng-roll-cta:active:not(:disabled) {
+  transform: none !important;
+  background: var(--vng-dos-accent) !important;
+  color: var(--vng-dos-bg) !important;
+}
+
+.vng-tui-btn:disabled,
+button:disabled {
+  opacity: 1 !important;
+  color: var(--vng-dos-muted) !important;
+  cursor: not-allowed;
+}
+
+.vng-tui-btn--ghost::before,
+.vng-tui-btn--ghost::after,
+.vng-btn-ghost-arcade::before,
+.vng-btn-ghost-arcade::after {
+  content: none;
+}
+
+.vng-btn-ghost-arcade {
+  text-decoration: underline;
+}
+
+/* ── Form fields ── */
+.vng-tui-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.vng-tui-field__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--vng-dos-muted);
+  letter-spacing: 0.06em;
+}
+
+.vng-tui-field__row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: var(--vng-dos-muted);
+  font-size: 0.8125rem;
+}
+
+.vng-tui-field__row::before {
+  content: "[ ";
+  flex-shrink: 0;
+}
+
+.vng-tui-field__row::after {
+  content: " ]";
+  flex-shrink: 0;
+}
+
+.vng-tui-input,
+.vng-tui-textarea,
+.vng-terminal-input,
+input[class*="border-vng"],
+textarea[class*="border-vng"] {
+  flex: 1;
+  min-width: 0;
+  padding: 0.1rem 0.25rem !important;
+  border: none !important;
+  background: var(--vng-dos-bg) !important;
+  color: var(--vng-dos-fg) !important;
+  outline: none !important;
+  font-family: inherit !important;
+  font-size: 0.8125rem !important;
+}
+
+.vng-tui-input:focus,
+.vng-tui-textarea:focus,
+.vng-terminal-input:focus {
+  background: var(--vng-dos-bg) !important;
+  outline: 1px dotted var(--vng-dos-fg) !important;
+  outline-offset: 0;
+}
+
+.vng-room-shell input::placeholder,
+.vng-room-shell textarea::placeholder {
+  color: var(--vng-dos-muted) !important;
+  opacity: 1 !important;
+}
+
+/* ── HP text meter ── */
+.vng-hp-text {
+  font-family: inherit;
+  font-size: 0.8125rem;
+  color: var(--vng-dos-fg);
+  letter-spacing: 0.02em;
+  margin: 0.25rem 0;
+}
+
+.vng-hp-text__bar {
+  color: var(--vng-dos-fg);
+}
+
+.vng-hp-text__empty {
+  color: var(--vng-dos-muted);
+}
+
+.vng-hp-bar {
+  display: none !important;
+}
+
+/* ── Dice selector ── */
+.vng-dice-btn {
+  border: 1px solid var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+  color: var(--vng-dos-muted) !important;
+  padding: 0.35rem 0.25rem !important;
+}
+
+.vng-dice-btn:hover:not(:disabled) {
+  color: var(--vng-dos-fg) !important;
+  border-color: var(--vng-dos-fg) !important;
+}
+
+.vng-dice-btn--active,
+.vng-tui-die--active {
+  border: 1px solid var(--vng-dos-fg) !important;
+  color: var(--vng-dos-fg) !important;
+  background: var(--vng-dos-bg) !important;
+}
+
+.vng-dice-arena,
+.vng-die-face {
+  border: 1px dashed var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+}
+
+.vng-die-face {
+  width: auto !important;
+  height: auto !important;
+  min-width: 2.5rem;
+  padding: 0.15rem 0.35rem !important;
+  clip-path: none !important;
+}
+
+.vng-die-face__value {
+  font-size: 1rem !important;
+  color: var(--vng-dos-fg) !important;
+}
+
+.vng-die-face--crit .vng-die-face__value {
+  animation: vng-dos-blink 0.6s step-end infinite;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* ── Terminal feed ── */
+.vng-feed-scroll {
+  font-size: 0.8125rem !important;
+  color: var(--vng-dos-fg) !important;
+}
+
+.vng-feed-roll,
+.vng-feed-chat,
+.vng-terminal-line {
+  border: none !important;
+  border-left: 1px solid var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+  padding: 0.25rem 0.35rem !important;
+}
+
+.vng-terminal-prompt,
+.vng-dos-prompt {
+  color: var(--vng-dos-muted);
+  flex-shrink: 0;
+}
+
+.vng-dos-prompt--cmd::before {
+  content: "ВнГ> ";
+  color: var(--vng-dos-fg);
+}
+
+.vng-feed-roll--crit,
+.vng-feed-roll--crit .vng-roll-total {
+  animation: vng-dos-blink 0.55s step-end infinite !important;
+  border-left-color: var(--vng-dos-fg) !important;
+  background: var(--vng-dos-bg) !important;
+}
+
+.vng-terminal-line__meta {
+  color: var(--vng-dos-muted) !important;
+  font-size: 0.75rem !important;
+}
+
+.vng-terminal-tabs {
+  border: 1px solid var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+  gap: 0 !important;
+}
+
+.vng-terminal-tabs button {
+  padding: 0.15rem 0.4rem !important;
+  color: var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+  border: none !important;
+  text-transform: uppercase;
+}
+
+.vng-terminal-tabs button.vng-tab--active {
+  color: var(--vng-dos-bg) !important;
+  background: var(--vng-dos-fg) !important;
+}
+
+.vng-dos-chat-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-top: 1px solid var(--vng-dos-muted) !important;
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.vng-dos-chat-input-wrap .vng-dos-cursor {
+  color: var(--vng-dos-fg);
+  animation: vng-dos-cursor 1s step-end infinite;
+}
+
+/* ── Tab bar ── */
+.vng-retro-tabbar {
+  border-top: 1px solid var(--vng-dos-fg) !important;
+  background: var(--vng-dos-bg) !important;
+}
+
+.vng-retro-tab {
+  color: var(--vng-dos-muted) !important;
+  border-top: 1px solid transparent !important;
+  padding: 0.35rem 0.15rem !important;
+}
+
+.vng-retro-tab:hover {
+  color: var(--vng-dos-fg) !important;
+  background: var(--vng-dos-bg) !important;
+}
+
+.vng-retro-tab--active {
+  color: var(--vng-dos-bg) !important;
+  background: var(--vng-dos-fg) !important;
+  border-top-color: var(--vng-dos-fg) !important;
+}
+
+.vng-retro-tab__label {
+  font-family: inherit !important;
+  font-size: 0.75rem !important;
+}
+
+/* ── Tables (GM enemies) ── */
+.vng-dos-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+}
+
+.vng-dos-table th,
+.vng-dos-table td {
+  border: 1px solid var(--vng-dos-muted);
+  padding: 0.2rem 0.35rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.vng-dos-table th {
+  color: var(--vng-dos-muted);
+  font-weight: 700;
+}
+
+.vng-dos-table td {
+  color: var(--vng-dos-fg);
+}
+
+.vng-dos-enemy-block {
+  border: 1px solid var(--vng-dos-muted) !important;
+  padding: 0.35rem !important;
+  margin-bottom: 0.35rem;
+  background: var(--vng-dos-bg) !important;
+}
+
+/* ── Arcade HUD round ── */
+.vng-arcade-hud {
+  border: 1px solid var(--vng-dos-fg) !important;
+  background: var(--vng-dos-bg) !important;
+  font-size: 0.75rem !important;
+}
+
+.vng-arcade-hud__value {
+  color: var(--vng-dos-fg) !important;
+}
+
+/* ── Dice stepper (кол-во / модиф.) — без TUI-скобок ── */
+.vng-dice-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid var(--vng-dos-muted);
+  background: var(--vng-dos-bg);
+}
+
+.vng-dice-stepper__value {
+  flex: 1;
+  min-width: 2rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.vng-dice-stepper__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--vng-dos-muted);
+  background: var(--vng-dos-bg);
+  color: var(--vng-dos-fg);
+  cursor: pointer;
+  font: inherit;
+}
+
+.vng-dice-stepper__btn::before,
+.vng-dice-stepper__btn::after {
+  content: none !important;
+  display: none !important;
+}
+
+.vng-dice-stepper__btn svg {
+  display: block !important;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.vng-dice-stepper__btn:hover:not(:disabled) {
+  border-color: var(--vng-dos-fg);
+  background: var(--vng-dos-fg);
+  color: var(--vng-dos-bg);
+}
+
+.vng-dice-stepper__btn:active:not(:disabled) {
+  border-color: var(--vng-dos-accent);
+  background: var(--vng-dos-accent);
+  color: var(--vng-dos-bg);
+}
+
+.vng-dice-stepper__btn:disabled {
+  opacity: 1;
+  color: var(--vng-dos-muted);
+  border-color: var(--vng-dos-muted);
+  cursor: not-allowed;
+}
+
+/* ── Dice throw pit (поле под «Бросить») ── */
+.vng-dice-throw-pit {
+  position: relative;
+  min-height: 10rem;
+  flex: 1;
+  margin-top: 0.25rem;
+  border: 1px dashed var(--vng-dos-muted);
+  background: var(--vng-dos-bg);
+  overflow: hidden;
+}
+
+.vng-dice-throw-pit--rolling {
+  border-style: solid;
+  border-color: var(--vng-dos-fg);
+}
+
+.vng-dice-throw-pit__hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--vng-dos-muted);
+}
+
+.vng-die-visual {
+  position: absolute;
+  width: clamp(4.5rem, 22vw, 6.5rem);
+  height: clamp(4.5rem, 22vw, 6.5rem);
+  z-index: 2;
+  transition:
+    left 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.vng-dice-throw-pit--rolling .vng-die-visual {
+  transition:
+    left 0.08s linear,
+    top 0.08s linear,
+    transform 0.08s linear;
+}
+
+.vng-die-visual__svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.vng-die-visual__svg polygon,
+.vng-die-visual__svg rect,
+.vng-die-visual__svg circle {
+  fill: var(--vng-dos-bg);
+  stroke: var(--vng-dos-fg);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.vng-die-visual__number {
+  fill: var(--vng-dos-fg);
+  font-family: "Courier New", Consolas, monospace;
+  font-weight: 700;
+}
+
+.vng-die-visual__dot {
+  fill: var(--vng-dos-fg);
+}
+
+.vng-die-visual__svg.vng-die-visual--crit polygon,
+.vng-die-visual__svg.vng-die-visual--crit rect,
+.vng-die-visual__svg.vng-die-visual--crit circle {
+  animation: vng-dos-blink 0.55s step-end infinite;
+}
+
+.vng-die-visual__svg.vng-die-visual--fumble .vng-die-visual__number {
+  opacity: 0.65;
+}
+
+.vng-dice-throw-pit__total {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.35rem;
+  margin: 0;
+  text-align: center;
+  font-size: 0.875rem;
+  z-index: 3;
+  background: linear-gradient(transparent, var(--vng-dos-bg) 35%);
+  padding-top: 1.25rem;
+}
+
+.vng-dice-throw-pit__total-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--vng-dos-accent);
+}
+
+/* ── Dice readout (1d20 lines) ── */
+.vng-room-shell .vng-dice-readout {
+  border-top-color: var(--vng-dos-muted) !important;
+  border-bottom-color: var(--vng-dos-muted) !important;
+}
+
+/* ── Leaderboard / arcade hall ── */
+.vng-retro-title,
+.vng-retro-row,
+.vng-retro-input,
+.vng-retro-btn {
+  font-family: inherit !important;
+}
+
+.vng-room-shell .vng-retro-panel,
+.vng-room-shell .vng-retro-panel::before {
+  border-color: var(--vng-dos-fg) !important;
+  background: var(--vng-dos-bg) !important;
+}
+
+.vng-room-shell .vng-retro-panel__hero,
+.vng-room-shell .vng-retro-panel__footer {
+  border-color: var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+}
+
+.vng-room-shell .vng-retro-panel__hero {
+  border-bottom: 1px solid var(--vng-dos-muted) !important;
+}
+
+.vng-room-shell .vng-retro-panel__footer {
+  border-top: 1px solid var(--vng-dos-muted) !important;
+}
+
+.vng-room-shell .vng-retro-input {
+  border-color: var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+  color: var(--vng-dos-fg) !important;
+}
+
+.vng-room-shell .vng-retro-input::placeholder {
+  color: var(--vng-dos-muted) !important;
+  opacity: 1 !important;
+}
+
+.vng-room-shell .vng-retro-title {
+  color: var(--vng-dos-fg) !important;
+}
+
+.vng-room-shell .vng-retro-row {
+  border-bottom-color: var(--vng-dos-muted) !important;
+  color: var(--vng-dos-fg) !important;
+}
+
+.vng-room-shell .vng-retro-edit-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--vng-dos-muted) !important;
+}
+
+.vng-room-shell .vng-retro-btn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem !important;
+  border: 1px solid var(--vng-dos-fg) !important;
+  background: var(--vng-dos-bg) !important;
+  color: var(--vng-dos-fg) !important;
+  font-size: 0.8125rem !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.vng-room-shell .vng-retro-btn:hover:not(:disabled) {
+  background: var(--vng-dos-fg) !important;
+  color: var(--vng-dos-bg) !important;
+}
+
+.vng-room-shell .vng-retro-btn:disabled {
+  color: var(--vng-dos-muted) !important;
+  border-color: var(--vng-dos-muted) !important;
+  cursor: not-allowed;
+}
+
+.vng-room-shell .vng-retro-icon-btn {
+  padding: 0.2rem !important;
+  border: 1px solid var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+  color: var(--vng-dos-fg) !important;
+  cursor: pointer;
+}
+
+.vng-room-shell .vng-retro-icon-btn:hover:not(:disabled) {
+  border-color: var(--vng-dos-fg) !important;
+  background: var(--vng-dos-fg) !important;
+  color: var(--vng-dos-bg) !important;
+}
+
+.vng-room-shell .vng-retro-icon-btn:disabled {
+  color: var(--vng-dos-muted) !important;
+  opacity: 1 !important;
+}
+
+.vng-room-shell .vng-retro-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  padding: 0.1rem 0.25rem;
+  border: 1px solid var(--vng-dos-muted);
+  font-weight: 700;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.vng-room-shell .vng-retro-rank--gold {
+  color: var(--vng-dos-accent) !important;
+  border-color: var(--vng-dos-accent) !important;
+}
+
+.vng-room-shell .vng-retro-rank--silver {
+  color: var(--vng-dos-fg) !important;
+  border-color: var(--vng-dos-fg) !important;
+}
+
+.vng-room-shell .vng-retro-rank--bronze {
+  color: var(--vng-dos-muted) !important;
+  border-color: var(--vng-dos-fg) !important;
+}
+
+.vng-room-shell .vng-retro-rank--plain {
+  color: var(--vng-dos-muted) !important;
+}
+
+.vng-room-shell .vng-retro-row--first {
+  border-left: 2px solid var(--vng-dos-accent) !important;
+}
+
+.vng-room-shell .vng-retro-empty {
+  padding: 1.5rem 0.5rem;
+  text-align: center;
+  border: 1px dashed var(--vng-dos-muted) !important;
+}
+
+.vng-retro-music-bar {
+  border-bottom: 1px solid var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+  color: var(--vng-dos-fg) !important;
+}
+
+.vng-stat-tile {
+  border: 1px solid var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+}
+
+.vng-stat-tile__icon {
+  border: 1px solid var(--vng-dos-muted) !important;
+  background: var(--vng-dos-bg) !important;
+  color: var(--vng-dos-fg) !important;
+  border-radius: 0 !important;
+}
+
+.vng-tui-btn svg {
+  display: none;
+}
+
+.vng-tui-field__row--area {
+  align-items: stretch;
+}
+
+.vng-tui-field__row--area .vng-tui-textarea {
+  min-height: 4rem;
+}
+
+.vng-dos-table input.vng-tui-input {
+  padding: 0.05rem 0.2rem !important;
+  width: 100%;
+}
+
+/* Utility overrides inside room */
+.vng-room-shell .text-vng-muted,
+.vng-room-shell .text-vng-retro-dim {
+  color: var(--vng-dos-muted) !important;
+}
+
+.vng-room-shell .text-vng-blue,
+.vng-room-shell .text-vng-purple,
+.vng-room-shell .text-vng-green,
+.vng-room-shell .text-vng-retro-phosphor,
+.vng-room-shell .text-vng-danger {
+  color: var(--vng-dos-fg) !important;
+}
+
+.vng-room-shell .text-vng-amber,
+.vng-room-shell .text-vng-retro-gold,
+.vng-room-shell .text-vng-gold {
+  color: var(--vng-dos-accent) !important;
+}
+
+.vng-room-shell .bg-vng-elevated,
+.vng-room-shell .bg-vng-surface,
+.vng-room-shell [class*="bg-vng-"] {
+  background-color: color-mix(in srgb, var(--vng-dos-bg) 76%, transparent) !important;
+}
+
+.vng-room-shell .border-vng-border,
+.vng-room-shell [class*="border-vng-"] {
+  border-color: var(--vng-dos-border) !important;
+}
+
+.vng-room-shell ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: var(--vng-dos-bg);
+}
+
+.vng-room-shell ::-webkit-scrollbar-thumb {
+  background: var(--vng-dos-muted);
+  border-radius: 0 !important;
+}
+
+.vng-room-shell ::-webkit-scrollbar-thumb:hover {
+  background: var(--vng-dos-fg);
+}
+
+/* ── Stage: simple global darkness ── */
+.vng-room-shell {
+  position: relative;
+  --vng-stage-light: 100;
+}
+
+.vng-stage-dark-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background: #000;
+  transition: opacity 180ms linear;
+}
+
+.vng-room-roster,
+.vng-room-sidefeed,
+.vng-encounter-editor-panel,
+.vng-room-layout__main .vng-panel,
+.vng-room-layout__main .vng-card,
+.vng-room-layout__main .vng-retro-panel,
+.vng-room-layout__main .vng-terminal-panel {
+  background: color-mix(in srgb, var(--vng-dos-bg) 70%, transparent) !important;
+  backdrop-filter: blur(3px);
+}
+
+.vng-room-roster__head,
+.vng-room-sidefeed__head {
+  background: color-mix(in srgb, var(--vng-dos-bg) 74%, transparent);
+}
+
+.vng-room-roster__row--hand {
+  background: color-mix(in srgb, var(--vng-dos-fg) 18%, transparent);
+}
+
+/* ── Room layout: side chat + encounter banner ── */
+.vng-room-layout {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vng-room-layout__body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vng-room-layout__main {
+  overflow: hidden;
+}
+
+.vng-room-layout__roster,
+.vng-room-layout__side {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.vng-room-layout__roster {
+  height: 9.5rem;
+  max-height: 11rem;
+}
+
+.vng-room-layout__side {
+  height: 11rem;
+  max-height: 13rem;
+}
+
+@media (min-width: 1024px) {
+  .vng-room-layout__roster {
+    height: 100%;
+    max-height: 100%;
+    width: min(100%, 14rem);
+    max-width: 16rem;
+  }
+
+  .vng-room-layout__side {
+    height: 100%;
+    max-height: 100%;
+    width: min(100%, 22rem);
+    max-width: 24rem;
+  }
+}
+
+.vng-room-roster {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--vng-dos-fg);
+  background: var(--vng-dos-bg);
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 0.45);
+}
+
+.vng-room-roster__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--vng-dos-muted);
+  color: var(--vng-dos-fg);
+  flex-shrink: 0;
+}
+
+.vng-room-roster__list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  overflow-y: auto;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.vng-room-roster__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--vng-dos-muted) 35%, transparent);
+}
+
+.vng-room-roster__row--hand {
+  background: color-mix(in srgb, var(--vng-dos-fg) 12%, var(--vng-dos-bg));
+}
+
+.vng-room-roster__name {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--vng-dos-fg);
+}
+
+.vng-room-roster__dice-btn--allowed {
+  background: var(--vng-dos-fg) !important;
+  color: var(--vng-dos-bg) !important;
+  border-color: var(--vng-dos-fg) !important;
+}
+
+.vng-room-roster__dice-btn {
+  min-width: 2rem;
+  padding-left: 0.35rem !important;
+  padding-right: 0.35rem !important;
+}
+
+.vng-room-roster__foot {
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid var(--vng-dos-muted);
+  flex-shrink: 0;
+}
+
+.vng-room-roster__hint,
+.vng-room-roster__gm {
+  flex-shrink: 0;
+}
+
+.vng-room-sidefeed {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--vng-dos-fg);
+  background: var(--vng-dos-bg);
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 0.45);
+}
+
+.vng-room-sidefeed__head {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--vng-dos-muted);
+  background: var(--vng-dos-bg);
+  color: var(--vng-dos-fg);
+}
+
+.vng-room-sidefeed__body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.vng-room-sidefeed__body .vng-panel {
+  border: none;
+  box-shadow: none;
+  height: 100%;
+  min-height: 0;
+}
+
+.vng-room-sidefeed__body .vng-panel-header {
+  flex-shrink: 0;
+}
+
+.vng-encounter-banner {
+  display: block;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  animation: vng-encounter-pulse 2.4s ease-in-out infinite;
+}
+
+.vng-encounter-banner__inner {
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 3px double var(--vng-dos-fg);
+  background: var(--vng-dos-bg);
+  box-shadow: 0 0 0 1px var(--vng-dos-muted), 4px 4px 0 rgb(0 0 0 / 0.45);
+}
+
+.vng-encounter-banner:hover .vng-encounter-banner__inner {
+  background: color-mix(in srgb, var(--vng-dos-fg) 8%, var(--vng-dos-bg));
+}
+
+.vng-encounter-banner__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  flex-shrink: 0;
+  border: 2px solid var(--vng-dos-fg);
+  color: var(--vng-dos-fg);
+}
+
+.vng-encounter-banner__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.vng-encounter-banner__tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--vng-dos-muted);
+  color: var(--vng-dos-muted);
+}
+
+.vng-encounter-banner__tag--fight {
+  border-color: var(--vng-dos-fg);
+  color: var(--vng-dos-bg);
+  background: var(--vng-dos-fg);
+}
+
+.vng-encounter-banner__title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--vng-dos-fg);
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .vng-encounter-banner__title {
+    font-size: 1.35rem;
+  }
+}
+
+.vng-encounter-banner__subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--vng-dos-muted);
+}
+
+.vng-encounter-banner__desc {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--vng-dos-fg);
+  opacity: 0.9;
+}
+
+.vng-encounter-banner__gm-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.7rem;
+  color: var(--vng-dos-muted);
+}
+
+.vng-encounter-banner__action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  color: var(--vng-dos-fg);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.vng-encounter-editor-panel {
+  border: 3px double var(--vng-dos-fg);
+  padding: 0.5rem;
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 0.4);
+}
+
+.vng-encounter-editor-panel--primary {
+  border-width: 4px;
+  padding: 0.65rem;
+  margin-bottom: 0.25rem;
+  box-shadow: 6px 6px 0 rgb(0 0 0 / 0.5);
+  animation: vng-encounter-pulse 3s ease-in-out infinite;
+}
+
+.vng-encounter-editor-panel > * {
+  min-height: 12rem;
+}
+
+.vng-encounter-editor-prominent .vng-panel-header h2 {
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+}
+
+.vng-encounter-editor-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.65rem;
+  border: 3px double var(--vng-dos-fg);
+  background: color-mix(in srgb, var(--vng-dos-fg) 10%, var(--vng-dos-bg));
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 0.4);
+}
+
+.vng-encounter-editor-head__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  flex-shrink: 0;
+  border: 2px solid var(--vng-dos-fg);
+  color: var(--vng-dos-fg);
+}
+
+.vng-encounter-editor-head__title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--vng-dos-fg);
+  line-height: 1.2;
+}
+
+.vng-encounter-editor-head__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--vng-dos-muted);
+}
+
+.vng-encounter-editor-live,
+.vng-encounter-editor-idle {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.55rem;
+  border: 2px solid var(--vng-dos-fg);
+}
+
+.vng-encounter-editor-live {
+  color: var(--vng-dos-bg);
+  background: var(--vng-dos-fg);
+  animation: vng-encounter-pulse 1.8s ease-in-out infinite;
+}
+
+.vng-encounter-editor-idle {
+  color: var(--vng-dos-muted);
+  border-color: var(--vng-dos-muted);
+}
+
+.vng-encounter-editor-actions {
+  padding-top: 0.75rem !important;
+}
+
+.vng-encounter-publish-btn {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.vng-encounter-image-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vng-encounter-image-field__empty {
+  padding: 0.5rem 0.65rem;
+  border: 1px dashed var(--vng-dos-muted);
+}
+
+/* Картинки энкаунтера + лайтбокс */
+.vng-encounter-img {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--vng-dos-fg);
+  background: var(--vng-dos-bg);
+  cursor: zoom-in;
+  overflow: hidden;
+  text-align: left;
+}
+
+.vng-encounter-img:hover {
+  border-color: var(--vng-dos-fg);
+  filter: brightness(1.08);
+}
+
+.vng-encounter-img__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: rgb(0 0 0 / 0.35);
+}
+
+.vng-encounter-img__zoom {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: 1px solid var(--vng-dos-fg);
+  background: var(--vng-dos-bg);
+  color: var(--vng-dos-fg);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.vng-encounter-img--compact {
+  width: 9.5rem;
+  height: 7.5rem;
+}
+
+.vng-encounter-img--editor {
+  min-height: 11rem;
+  max-height: 16rem;
+}
+
+.vng-encounter-img--card {
+  min-height: 12rem;
+  max-height: 20rem;
+}
+
+@media (min-width: 1024px) {
+  .vng-encounter-img--card {
+    min-height: 14rem;
+    max-height: 24rem;
+  }
+}
+
+.vng-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1rem 1rem;
+  background: rgb(0 0 0 / 0.92);
+  backdrop-filter: blur(4px);
+}
+
+.vng-image-lightbox__close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border: 2px solid var(--vng-dos-fg, #33ff33);
+  background: rgb(0 0 0 / 0.8);
+  color: var(--vng-dos-fg, #33ff33);
+  cursor: pointer;
+}
+
+.vng-image-lightbox__close:hover {
+  background: var(--vng-dos-fg, #33ff33);
+  color: #000;
+}
+
+.vng-image-lightbox__img {
+  max-width: min(100%, 72rem);
+  max-height: min(calc(100vh - 3rem), 56rem);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: 2px solid var(--vng-dos-fg, #33ff33);
+  box-shadow: 0 0 40px rgb(0 0 0 / 0.6);
+}
+
+/* ── Обрезка картинки энкаунтера ── */
+.vng-crop-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 0.88);
+  backdrop-filter: blur(3px);
+}
+
+.vng-crop-modal__dialog {
+  width: min(100%, 36rem);
+  max-height: min(100vh - 2rem, 40rem);
+  overflow: auto;
+  border: 2px solid var(--vng-dos-fg);
+  background: var(--vng-dos-bg);
+  box-shadow: 6px 6px 0 rgb(0 0 0 / 0.5);
+  padding: 1rem;
+}
+
+.vng-crop-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.vng-crop-modal__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--vng-dos-fg);
+}
+
+.vng-crop-modal__hint,
+.vng-crop-modal__error {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--vng-dos-muted);
+}
+
+.vng-crop-modal__error {
+  color: var(--vng-dos-fg);
+  border: 1px dashed var(--vng-dos-muted);
+  padding: 0.65rem;
+}
+
+.vng-crop-modal__frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  background: rgb(0 0 0 / 0.5);
+  border: 1px solid var(--vng-dos-muted);
+  user-select: none;
+}
+
+.vng-crop-modal__frame:active {
+  cursor: grabbing;
+}
+
+.vng-crop-modal__img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  pointer-events: none;
+}
+
+.vng-crop-modal__frame-border {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--vng-dos-fg);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.4);
+  pointer-events: none;
+}
+
+.vng-crop-modal__zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.vng-crop-modal__range {
+  accent-color: var(--vng-dos-fg);
+}
+
+.vng-crop-modal__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border: 1px solid var(--vng-dos-muted);
+  background: var(--vng-dos-bg);
+  color: var(--vng-dos-fg);
+  cursor: pointer;
+}
+
+.vng-crop-modal__icon-btn:hover {
+  border-color: var(--vng-dos-fg);
+  background: var(--vng-dos-fg);
+  color: var(--vng-dos-bg);
+}
+
+.vng-crop-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+  border-top: 1px dashed var(--vng-dos-muted);
+}
+
+.vng-encounter-image-field__toolbar .vng-tui-field__label {
+  margin-bottom: 0;
+}
+
+@keyframes vng-encounter-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.12);
+  }
+}
