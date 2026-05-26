@@ -783,6 +783,10 @@ wss.on('connection', (ws, req) => {
     room.clients.delete(ws)
     clearPlayerPresence(room, playerId)
     broadcastPresence(room, broadcast)
+    if (room.clients.size === 0) {
+      stopRoomMusic(room.id)
+      rooms.delete(room.id)
+    }
   })
 })
 
