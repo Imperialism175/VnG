@@ -21,13 +21,16 @@ export function parseYoutubeVideoId(url: string): string | null {
   return null
 }
 
-export function youtubeEmbedUrl(videoId: string, autoplay: boolean) {
+export function youtubeEmbedUrl(videoId: string, autoplay: boolean, origin?: string) {
   const params = new URLSearchParams({
     autoplay: autoplay ? '1' : '0',
     loop: '1',
     playlist: videoId,
     rel: '0',
     modestbranding: '1',
+    enablejsapi: '1',
+    playsinline: '1',
   })
+  if (origin) params.set('origin', origin)
   return `https://www.youtube.com/embed/${videoId}?${params}`
 }

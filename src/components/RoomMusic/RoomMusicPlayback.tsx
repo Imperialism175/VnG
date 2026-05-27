@@ -30,6 +30,7 @@ function readStoredVolume(): number {
  */
 export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
+  const youtubeFrameRef = useRef<HTMLIFrameElement>(null)
   const [needsUnlock, setNeedsUnlock] = useState(false)
   const [streamError, setStreamError] = useState(false)
   const [localVolume, setLocalVolume] = useState(readStoredVolume)
@@ -40,14 +41,39 @@ export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
   }, [roomId, music.playing, music.stream_token, music.use_host_proxy])
   const youtubeEmbedSrc = useMemo(() => {
     if (!music.playing || music.use_host_proxy || music.source !== 'youtube' || !music.video_id) return null
-    return youtubeEmbedUrl(music.video_id, true)
+    const origin = typeof window !== 'undefined' ? window.location.origin : undefined
+    return youtubeEmbedUrl(music.video_id, true, origin)
   }, [music.playing, music.use_host_proxy, music.source, music.video_id])
+
+  const applyYoutubeVolume = useCallback((vol: number) => {
+    const frame = youtubeFrameRef.current
+    const target = frame?.contentWindow
+    if (!target) return
+    const send = (func: string, args: unknown[] = []) => {
+      target.postMessage(
+        JSON.stringify({
+          event: 'command',
+          func,
+          args,
+        }),
+        '*'
+      )
+    }
+    send('setVolume', [Math.max(0, Math.min(100, Math.round(vol)))])
+    if (vol <= 0) send('mute')
+    else send('unMute')
+  }, [])
 
   useEffect(() => {
     const el = audioRef.current
     if (!el) return
     el.volume = localVolume / 100
   }, [localVolume])
+
+  useEffect(() => {
+    if (!youtubeEmbedSrc) return
+    applyYoutubeVolume(localVolume)
+  }, [youtubeEmbedSrc, localVolume, applyYoutubeVolume])
 
   const tryPlay = useCallback(async () => {
     const el = audioRef.current
@@ -110,6 +136,7 @@ export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
       /* ignore */
     }
     if (audioRef.current) audioRef.current.volume = v / 100
+    if (youtubeEmbedSrc) applyYoutubeVolume(v)
   }
 
   const showBar = Boolean(music.playing && music.url)
@@ -124,12 +151,14 @@ export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
       {youtubeEmbedSrc && (
         <iframe
           key={youtubeEmbedSrc}
+          ref={youtubeFrameRef}
           src={youtubeEmbedSrc}
           title="Room music player"
           allow="autoplay; encrypted-media"
           className="absolute w-px h-px opacity-0 pointer-events-none"
           tabIndex={-1}
           aria-hidden
+          onLoad={() => applyYoutubeVolume(localVolume)}
         />
       )}
 
@@ -147,7 +176,7 @@ export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
               <span className="text-vng-text">{displayTitle}</span>
               <span className="text-xs text-vng-muted ml-1.5 hidden sm:inline">{sourceLabel}</span>
             </p>
-            {isHostStreamMode && <MusicVolumeControl volume={localVolume} onChange={handleVolumeChange} compact />}
+            <MusicVolumeControl volume={localVolume} onChange={handleVolumeChange} compact />
             {isHostStreamMode && needsUnlock && !streamError && (
               <button type="button" onClick={() => tryPlay()} className="vng-tui-btn shrink-0 text-xs">
                 SOUND ON

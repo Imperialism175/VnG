@@ -175,10 +175,10 @@ function ChatLine({ message }: { message: ChatMessage }) {
 
   return (
     <article className={`vng-feed-chat vng-terminal-line ${isAnnounce ? 'vng-feed-announce' : ''}`}>
-      <p className="vng-terminal-line__body whitespace-pre-wrap break-words text-sm">
+      <p className="vng-terminal-line__body vng-terminal-line__body--chat text-sm">
         <span className="vng-dos-prompt vng-dos-prompt--cmd" />
-        <span className="text-vng-muted">{message.player_name.toUpperCase()}: </span>
-        <span>{body}</span>
+        <span className="text-vng-muted shrink-0">{message.player_name.toUpperCase()}: </span>
+        <span className="vng-chat-line__text">{body}</span>
       </p>
     </article>
   )

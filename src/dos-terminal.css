@@ -560,6 +560,22 @@ textarea[class*="border-vng"] {
   font-size: 0.75rem !important;
 }
 
+.vng-terminal-line__body {
+  min-width: 0;
+}
+
+.vng-terminal-line__body--chat {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.vng-chat-line__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .vng-terminal-tabs {
   border: 1px solid var(--vng-dos-muted) !important;
   background: var(--vng-dos-bg) !important;
