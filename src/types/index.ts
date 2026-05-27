@@ -57,12 +57,6 @@ export interface RoomPresence {
   diceAllowed: string[]
 }
 
-export interface VoiceSignal {
-  kind: 'join' | 'offer' | 'answer' | 'ice'
-  sdp?: RTCSessionDescriptionInit
-  candidate?: RTCIceCandidateInit | null
-}
-
 export interface Room {
   id: string
   name: string
