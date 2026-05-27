@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Minus, Plus, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { DiceThrowPit } from '@/components/DiceRoller/DiceThrowPit'
 import { DiceIcon } from '@/components/icons/DiceIcon'
 import { DICE_TYPES, parseDieValuesFromDetails, randomDieValues } from '@/lib/dice'
@@ -8,10 +8,19 @@ import { Panel } from '@/components/ui/Panel'
 import { Button } from '@/components/ui/Button'
 
 interface DiceRollerProps {
-  onRoll: (opts: { count: number; sides: DiceSides; modifier: number }) => void
+  onRoll: (opts: {
+    count: number
+    sides: DiceSides
+    scaleStatName?: string | null
+    scaleStatValue?: number | null
+    desiredAbilityLevel?: number | null
+  }) => void
   onReroll?: (opts: { count: number; sides: DiceSides; modifier: number }) => boolean
   playerId: string
   rollEvents: RollEvent[]
+  statOptions?: string[]
+  statValues?: Record<string, string>
+  statScaleValues?: Record<string, number>
   disabled?: boolean
   fillHeight?: boolean
   canRoll?: boolean
@@ -27,11 +36,28 @@ interface RollDisplay {
   sides: DiceSides
 }
 
+function toRollDisplay(event: RollEvent, fallbackSides: DiceSides): RollDisplay | null {
+  const values =
+    Array.isArray(event.rolls) && event.rolls.length > 0
+      ? event.rolls
+      : parseDieValuesFromDetails(event.details)
+  if (values.length === 0) return null
+  return {
+    values,
+    total: event.total,
+    modifier: event.modifier ?? 0,
+    sides: (event.sides as DiceSides) || fallbackSides,
+  }
+}
+
 export function DiceRoller({
   onRoll,
   onReroll,
   playerId,
   rollEvents,
+  statOptions = [],
+  statValues = {},
+  statScaleValues = {},
   disabled,
   fillHeight,
   canRoll = true,
@@ -41,12 +67,14 @@ export function DiceRoller({
 }: DiceRollerProps) {
   const [selectedSides, setSelectedSides] = useState<DiceSides>(20)
   const [diceCount, setDiceCount] = useState(1)
-  const [modifier, setModifier] = useState(0)
   const [rolling, setRolling] = useState(false)
   const [display, setDisplay] = useState<RollDisplay | null>(null)
   const [tumbleValues, setTumbleValues] = useState<number[]>([])
   const [tumbleTick, setTumbleTick] = useState(0)
   const [rerolling, setRerolling] = useState(false)
+  const [scaleStatName, setScaleStatName] = useState<string>('')
+  const [scaleStatValue, setScaleStatValue] = useState<number | null>(null)
+  const [desiredAbilityLevel, setDesiredAbilityLevel] = useState<string>('')
 
   const pendingRef = useRef(false)
   const rollStartedAt = useRef(0)
@@ -62,25 +90,27 @@ export function DiceRoller({
     const at = new Date(latest.created_at).getTime()
     if (at < rollStartedAt.current - 200) return
 
-    const values =
-      Array.isArray(latest.rolls) && latest.rolls.length > 0
-        ? latest.rolls
-        : parseDieValuesFromDetails(latest.details)
-
-    if (values.length === 0) return
+    const nextDisplay = toRollDisplay(latest, selectedSides)
+    if (!nextDisplay) return
 
     pendingRef.current = false
     lastShownRollId.current = latest.id
     setRolling(false)
     setTumbleValues([])
-    setDisplay({
-      values,
-      total: latest.total,
-      modifier: latest.modifier ?? 0,
-      sides: (latest.sides as DiceSides) || selectedSides,
-    })
+    setDisplay(nextDisplay)
     setRerolling(false)
   }, [rollEvents, playerId, selectedSides])
+
+  useEffect(() => {
+    if (pendingRef.current) return
+    const latest = rollEvents[rollEvents.length - 1]
+    if (!latest) return
+    if (latest.id === lastShownRollId.current) return
+    const nextDisplay = toRollDisplay(latest, selectedSides)
+    if (!nextDisplay) return
+    lastShownRollId.current = latest.id
+    setDisplay(nextDisplay)
+  }, [rollEvents, selectedSides])
 
   useEffect(() => {
     if (!rolling || !pendingRef.current) return
@@ -120,12 +150,19 @@ export function DiceRoller({
     setDisplay(null)
     setTumbleTick(0)
     setTumbleValues(randomDieValues(diceCount, selectedSides))
-    onRoll({ count: diceCount, sides: selectedSides, modifier })
+    onRoll({
+      count: diceCount,
+      sides: selectedSides,
+      scaleStatName: scaleStatName || null,
+      scaleStatValue: scaleStatValue ?? 0,
+      desiredAbilityLevel:
+        selectedSides === 20 && desiredAbilityLevel ? Math.max(1, Math.min(7, Number(desiredAbilityLevel))) : null,
+    })
   }
 
   function handleReroll() {
     if (rolling || rerolling || !display || !onReroll) return
-    const ok = onReroll({ count: diceCount, sides: selectedSides, modifier })
+    const ok = onReroll({ count: diceCount, sides: selectedSides, modifier: scaleStatValue ?? 0 })
     if (!ok) return
     setRerolling(true)
     pendingRef.current = true
@@ -137,8 +174,29 @@ export function DiceRoller({
 
   const pitSides = display?.sides ?? selectedSides
   const pitValues = rolling ? tumbleValues : display?.values ?? []
-  const mod = display?.modifier ?? modifier
+  const mod = display?.modifier ?? (scaleStatValue ?? 0)
   const total = display?.total
+
+  useEffect(() => {
+    if (!scaleStatName) {
+      setScaleStatValue(null)
+      return
+    }
+    const raw = statValues[scaleStatName]
+    const thresholdEffect = statScaleValues[scaleStatName]
+    if (Number.isFinite(thresholdEffect)) {
+      setScaleStatValue(thresholdEffect)
+      return
+    }
+    const parsed = Number(raw)
+    setScaleStatValue(Number.isFinite(parsed) ? parsed : 0)
+  }, [scaleStatName, statScaleValues, statValues])
+
+  useEffect(() => {
+    if (selectedSides !== 20 && desiredAbilityLevel) {
+      setDesiredAbilityLevel('')
+    }
+  }, [desiredAbilityLevel, selectedSides])
 
   return (
     <Panel title="Кубомёт" icon={<Sparkles size={16} />} fillHeight={fillHeight} className={fillHeight ? 'min-h-0' : ''}>
@@ -170,69 +228,80 @@ export function DiceRoller({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-vng-muted uppercase tracking-[0.08em]">Кол-во (макс. 10)</span>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={diceCount}
+              onChange={(e) => {
+                const n = Number(e.target.value)
+                setDiceCount(Number.isFinite(n) ? Math.max(1, Math.min(10, Math.round(n))) : 1)
+              }}
+              disabled={rolling}
+              className="vng-tui-input"
+            />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-vng-muted uppercase tracking-[0.08em]">Скейл от стата</span>
+            <select
+              className="vng-tui-input"
+              value={scaleStatName}
+              onChange={(e) => setScaleStatName(e.target.value)}
+              disabled={rolling}
+            >
+              <option value="">Без скейла</option>
+              {statOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-vng-muted">
+              Модификатор от стата: {scaleStatValue === null ? '0' : scaleStatValue > 0 ? `+${scaleStatValue}` : `${scaleStatValue}`}
+            </span>
+          </label>
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs text-vng-muted uppercase tracking-[0.08em]">Кол-во</span>
-            <div className="vng-dice-stepper" role="group" aria-label="Количество кубов">
-              <button
-                type="button"
-                className="vng-dice-stepper__btn"
-                disabled={rolling}
-                onClick={() => setDiceCount((c) => Math.max(1, c - 1))}
-                aria-label="Меньше кубов"
-              >
-                <Minus size={14} aria-hidden />
-              </button>
-              <span className="vng-dice-stepper__value vng-mono text-lg text-vng-blue">{diceCount}</span>
-              <button
-                type="button"
-                className="vng-dice-stepper__btn"
-                disabled={rolling}
-                onClick={() => setDiceCount((c) => Math.min(100, c + 1))}
-                aria-label="Больше кубов"
-              >
-                <Plus size={14} aria-hidden />
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs text-vng-muted uppercase tracking-[0.08em]">Модиф.</span>
-            <div className="vng-dice-stepper" role="group" aria-label="Модификатор броска">
-              <button
-                type="button"
-                className="vng-dice-stepper__btn"
-                disabled={rolling}
-                onClick={() => setModifier((m) => m - 1)}
-                aria-label="Уменьшить модификатор"
-              >
-                <Minus size={14} aria-hidden />
-              </button>
-              <span className="vng-dice-stepper__value vng-mono text-lg text-vng-amber">
-                {modifier > 0 ? `+${modifier}` : modifier}
-              </span>
-              <button
-                type="button"
-                className="vng-dice-stepper__btn"
-                disabled={rolling}
-                onClick={() => setModifier((m) => m + 1)}
-                aria-label="Увеличить модификатор"
-              >
-                <Plus size={14} aria-hidden />
-              </button>
-            </div>
+            <span className="text-xs text-vng-muted uppercase tracking-[0.08em]">Авто-режим заклинания</span>
+            <input
+              type="number"
+              min={1}
+              max={7}
+              value={desiredAbilityLevel}
+              onChange={(e) => setDesiredAbilityLevel(e.target.value.replace(/[^\d]/g, '').slice(0, 1))}
+              disabled={rolling || selectedSides !== 20}
+              className="vng-tui-input"
+              placeholder={selectedSides === 20 ? 'Уровень 1-7' : 'Только для d20'}
+            />
+            <p className="text-xs text-vng-muted leading-snug px-1 py-2 border border-vng-border rounded">
+              Проверка доступна только на d20. Введите желаемый уровень заклинания.
+            </p>
           </div>
         </div>
 
         <p className="vng-dice-readout text-center vng-mono text-sm text-vng-muted py-2">
           <span className="text-vng-blue">{diceCount}d{selectedSides}</span>
-          {modifier !== 0 && (
+          {(scaleStatValue ?? 0) !== 0 && (
             <span className="text-vng-amber">
-              {modifier > 0 ? ` + ${modifier}` : ` − ${Math.abs(modifier)}`}
+              {(scaleStatValue ?? 0) > 0 ? ` + ${scaleStatValue}` : ` − ${Math.abs(scaleStatValue ?? 0)}`}
             </span>
           )}
+          {scaleStatName && <span>{` | скейл: ${scaleStatName}`}</span>}
+          <span>{` | способность: ${selectedSides === 20 ? (desiredAbilityLevel ? `ур.${desiredAbilityLevel}` : 'выкл') : 'только d20'}`}</span>
         </p>
 
-        <Button type="button" size="lg" disabled={rollLocked || rolling} onClick={handleRoll} className="w-full shrink-0">
+        <Button
+          type="button"
+          size="lg"
+          disabled={rollLocked || rolling}
+          onClick={handleRoll}
+          className="mx-auto shrink-0 min-w-[12rem] justify-center"
+        >
           {rolling ? 'БРОСОК…' : cooldownSec > 0 ? `ЖДИТЕ ${cooldownSec} С` : 'БРОСИТЬ'}
         </Button>
         {onReroll && (

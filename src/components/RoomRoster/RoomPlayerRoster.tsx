@@ -7,9 +7,8 @@ interface RoomPlayerRosterProps {
   myPlayerId: string
   isGm: boolean
   handsRaised: string[]
-  diceAllowed: string[]
   onToggleHand: (raised: boolean) => void
-  onSetDicePermission: (playerId: string, allowed: boolean) => void
+  onSignalPlayer: (playerId: string) => void
 }
 
 export function RoomPlayerRoster({
@@ -17,9 +16,8 @@ export function RoomPlayerRoster({
   myPlayerId,
   isGm,
   handsRaised,
-  diceAllowed,
   onToggleHand,
-  onSetDicePermission,
+  onSignalPlayer,
 }: RoomPlayerRosterProps) {
   const roster = players.filter((p) => !p.is_gm)
   const myHandUp = handsRaised.includes(myPlayerId)
@@ -38,7 +36,6 @@ export function RoomPlayerRoster({
         ) : (
           roster.map((p) => {
             const handUp = handsRaised.includes(p.id)
-            const canRoll = diceAllowed.includes(p.id)
             const isSelf = p.id === myPlayerId
             return (
               <li key={p.id} className={`vng-room-roster__row ${handUp ? 'vng-room-roster__row--hand' : ''}`}>
@@ -54,10 +51,10 @@ export function RoomPlayerRoster({
                     type="button"
                     size="sm"
                     variant="secondary"
-                    className={`vng-room-roster__dice-btn shrink-0 ${canRoll ? 'vng-room-roster__dice-btn--allowed' : ''}`}
-                    onClick={() => onSetDicePermission(p.id, !canRoll)}
-                    title={canRoll ? 'Запретить бросок кубов' : 'Разрешить бросок кубов'}
-                    aria-label={canRoll ? `Запретить кубы: ${p.name}` : `Разрешить кубы: ${p.name}`}
+                    className="vng-room-roster__dice-btn shrink-0"
+                    onClick={() => onSignalPlayer(p.id)}
+                    title="Подать звуковой сигнал игроку"
+                    aria-label={`Подать звуковой сигнал: ${p.name}`}
                   >
                     <Dices size={12} />
                   </Button>
@@ -86,7 +83,7 @@ export function RoomPlayerRoster({
       {isGm && (
         <p className="vng-room-roster__hint text-[10px] leading-snug text-vng-muted px-2 pb-2">
           <Dices size={10} className="inline mr-0.5" />
-          Кнопка у игрока — разрешить бросок. Вы бросаете всегда.
+          Кнопка у игрока — звуковой сигнал выбранному игроку.
         </p>
       )}
 

@@ -31,7 +31,7 @@ export function getDieFaceShape(sides: DiceSides): {
 } {
   switch (sides) {
     case 3:
-      return { tag: 'polygon', attrs: { points: '50,18 82,75 18,75' } }
+      return { tag: 'rect', attrs: { x: 18, y: 18, width: 64, height: 64, rx: 4 } }
     case 4:
       return { tag: 'polygon', attrs: { points: '50,12 88,78 12,78' } }
     case 6:

@@ -2,6 +2,7 @@ import type { Character, CounterField, StatField, TextField } from '@/types'
 import { generateId } from '@/lib/utils'
 
 export const DEFAULT_STATS = [
+  'ХП',
   'СИЛА',
   'ЛОВКОСТЬ',
   'ХАРИЗМА',
@@ -54,13 +55,9 @@ function textField(name: string, value: string): TextField {
 export const SKILL_POINTS_COUNTER_NAME = 'Очки характеристик'
 export const SPECIAL_FIELD_NAMES = [
   'Способности',
-  'Инвентарь',
   'Бэкграунд',
-  'Особое',
   'Заметки ГМ',
   'Правило листика',
-  'Очки на характеристики',
-  'Хранилище приемов',
 ] as const
 
 export function createDefaultStats(): StatField[] {
@@ -68,7 +65,7 @@ export function createDefaultStats(): StatField[] {
 }
 
 export function createDefaultCounters(): CounterField[] {
-  return [counter('ХП', 10, 10)]
+  return [counter('ХП', 0, 0), counter('Очки вдохновения', 0, 99)]
 }
 
 export function createDefaultTextFields(): TextField[] {
@@ -86,10 +83,14 @@ function withBase(base: Character, opts?: {
   statBonus?: number
   skillPoints?: number | null
 }) {
-  const hp = opts?.hp ?? { current: 10, max: 10 }
+  const hp = opts?.hp ?? { current: 0, max: 0 }
   const bonus = opts?.statBonus ?? 0
   const stats = createDefaultStats().map((s) => ({ ...s, value: String(Number(s.value) + bonus) }))
-  const counters = [counter('ХП', hp.current, hp.max)]
+  const hpStatIdx = stats.findIndex((s) => String(s.name).trim().toLowerCase() === 'хп')
+  if (hpStatIdx >= 0) {
+    stats[hpStatIdx] = { ...stats[hpStatIdx], value: String(hp.max) }
+  }
+  const counters = [counter('ХП', hp.current, hp.max), counter('Очки вдохновения', 0, 99)]
   if (typeof opts?.skillPoints === 'number') {
     counters.push(counter(SKILL_POINTS_COUNTER_NAME, Math.max(0, opts.skillPoints), 999))
   }
@@ -297,28 +298,32 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
   {
     id: 'garry',
     label: 'Листик Гарри Потера',
-    points: 'стандартные очки',
-    pointsValue: null,
+    points: '27 очков',
+    pointsValue: 27,
     notes: 'Добавляет характеристики МАГИЯ и ЗЕЛЬЕВАРЕНИЕ.',
     apply: (base) =>
       withBase(base, {
         classStatus: 'Листик Гарри Потера',
+        skillPoints: 27,
         extraStats: [stat('МАГИЯ', '0'), stat('ЗЕЛЬЕВАРЕНИЕ', '0')],
         extraText: [
           textField('Правило листика', 'Магия работает и на литературные приемы, Зельеварение — и на крафт.'),
+          textField('Очки на характеристики', '27'),
         ],
       }),
   },
   {
     id: 'engineer',
     label: 'Листок Инженера',
-    points: 'стандартные очки',
-    pointsValue: null,
+    points: '27 очков',
+    pointsValue: 27,
     notes: 'Инвентарь заменен на Крафтовый Стол.',
     apply: (base) =>
       withBase(base, {
         classStatus: 'Листок Инженера',
+        skillPoints: 27,
         textOverrides: { Инвентарь: 'Крафтовый Стол' },
+        extraText: [textField('Очки на характеристики', '27')],
       }),
   },
   {
@@ -347,7 +352,6 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
       withBase(base, {
         classStatus: 'Лист Преодолителя',
         skillPoints: 25,
-        extraCounters: [counter('Очки вдохновения', 0, 99)],
         textOverrides: { Бэкграунд: 'Кузница вдохновения' },
         extraText: [
           textField('Правило листика', 'Вдохновение можно хранить и тратить на переброс.'),
@@ -360,14 +364,13 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
     label: 'Листик Казуала',
     points: '28 очков',
     pointsValue: 28,
-    notes: 'Бонус ко всем характеристикам +10.',
+    notes: 'Со старта все характеристики по 0 и 28 очков. Эффект порога всегда +10.',
     apply: (base) =>
       withBase(base, {
         classStatus: 'Листик Казуала',
         skillPoints: 28,
-        statBonus: 10,
         extraText: [
-          textField('Правило листика', 'Бонус ко всем характеристикам +10.'),
+          textField('Правило листика', 'Все характеристики стартуют с 0. Эффект порога всегда даёт +10.'),
           textField('Очки на характеристики', '28'),
         ],
       }),
@@ -449,6 +452,24 @@ export function ensureSpecialTextFields(textFields: TextField[] | undefined): Te
     const key = name.trim().toLowerCase()
     const found = byName.get(key)
     return found ? { ...found, name } : textField(name, '')
+  })
+}
+
+function ensureAbilityLevelsTemplate(text: string): string {
+  const src = String(text ?? '')
+  if (/ур(?:овень)?\s*1/i.test(src) || /\blvl\s*1\b/i.test(src)) return src
+  const prefix = src ? `${src}\n\n` : ''
+  return `${prefix}Уровень 1: \nУровень 2: \nУровень 3: \nУровень 4: \nУровень 5: \nУровень 6: \nУровень 7: `
+}
+
+export function ensureAbilityLevelFields(textFields: TextField[] | undefined): TextField[] {
+  const fields = ensureSpecialTextFields(textFields)
+  return fields.map((f) => {
+    if (f.name.trim().toLowerCase() !== 'способности') return f
+    return {
+      ...f,
+      value: ensureAbilityLevelsTemplate(f.value),
+    }
   })
 }
 
@@ -548,15 +569,41 @@ export function getStatEffectForCharacterSheet(
   classStatus: string,
   statValue: number
 ): StatEffectValue | null {
-  if (sheetPresetId) {
-    const normalizedId = SHEET_PRESETS.some((p) => p.id === sheetPresetId) ? (sheetPresetId as SheetPresetId) : null
-    if (normalizedId) {
-      if (normalizedId === 'casual') return 10
-      const byPreset = TABLES[normalizedId] ?? BASE_TABLE
-      return byPreset[statValue] ?? null
-    }
+  const presetId = resolveCharacterPresetId(sheetPresetId, classStatus)
+  if (!presetId) return null
+  if (presetId === 'casual') return 10
+  const byPreset = TABLES[presetId] ?? BASE_TABLE
+  return byPreset[statValue] ?? null
+}
+
+export function resolveCharacterPresetId(
+  sheetPresetId: string | null | undefined,
+  classStatus: string
+): SheetPresetId | null {
+  if (sheetPresetId && SHEET_PRESETS.some((p) => p.id === sheetPresetId)) {
+    return sheetPresetId as SheetPresetId
   }
-  return getStatEffectForSheet(classStatus, statValue)
+  return normalizePresetIdByClassStatus(classStatus)
+}
+
+export function getThresholdEffectsForCharacter(
+  sheetPresetId: string | null | undefined,
+  classStatus: string
+): Array<{ threshold: number; effect: StatEffectValue }> {
+  const presetId = resolveCharacterPresetId(sheetPresetId, classStatus)
+  if (!presetId) return []
+  if (presetId === 'casual') {
+    return [{ threshold: 0, effect: 10 }]
+  }
+  const byPreset = TABLES[presetId] ?? BASE_TABLE
+  return Object.entries(byPreset)
+    .map(([threshold, effect]) => ({ threshold: Number(threshold), effect }))
+    .filter((row) => Number.isFinite(row.threshold))
+    .sort((a, b) => a.threshold - b.threshold)
+}
+
+export function isResearcherSheet(sheetPresetId: string | null | undefined, classStatus: string): boolean {
+  return resolveCharacterPresetId(sheetPresetId, classStatus) === 'researcher'
 }
 
 function toNumericThresholdEffect(effect: StatEffectValue | null): number {
@@ -571,7 +618,7 @@ export function computeMaxHpBySpentPoints(
 ): number {
   const spent = Math.max(0, Math.round(spentPoints))
   const threshold = toNumericThresholdEffect(getStatEffectForCharacterSheet(sheetPresetId, classStatus, spent))
-  return Math.max(1, baseHp + spent + threshold)
+  return Math.max(0, Math.round(baseHp + spent + threshold))
 }
 
 export function inferSpentPointsFromMaxHp(

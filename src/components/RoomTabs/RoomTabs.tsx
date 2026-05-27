@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import { BarChart3, Crown, Dices, Scroll, Swords, Trophy, Users } from 'lucide-react'
+import { BarChart3, Crown, Dices, Scroll, Trophy, Users } from 'lucide-react'
 
-export type PlayerTabId = 'sheet' | 'dice' | 'tops' | 'encounter' | 'vote'
-export type GmTabId = 'players' | 'dice' | 'tops' | 'encounter' | 'vote' | 'gm'
+export type PlayerTabId = 'sheet' | 'dice' | 'tops' | 'vote'
+export type GmTabId = 'players' | 'dice' | 'tops' | 'vote' | 'gm'
 
 interface TabDef<T extends string> {
   id: T
@@ -49,7 +49,7 @@ function RoomTabBar<T extends string>({ tabs, active, onChange }: RoomTabBarProp
 export function PlayerTabBar({
   active,
   onChange,
-  showEncounter,
+  showEncounter: _showEncounter,
   showVote,
 }: {
   active: PlayerTabId
@@ -62,15 +62,6 @@ export function PlayerTabBar({
     { id: 'dice', label: 'Кубы', hint: 'Бросок кубов', icon: <Dices size={18} /> },
     { id: 'tops', label: 'Топ', hint: 'Рейтинг от мастера', icon: <Trophy size={18} /> },
   ]
-  if (showEncounter) {
-    tabs.push({
-      id: 'encounter',
-      label: 'Бой',
-      hint: 'Текущий бой и энкаунтер',
-      icon: <Swords size={18} />,
-      highlight: active !== 'encounter',
-    })
-  }
   if (showVote) {
     tabs.push({
       id: 'vote',
@@ -86,7 +77,7 @@ export function PlayerTabBar({
 export function GmTabBar({
   active,
   onChange,
-  showEncounter,
+  showEncounter: _showEncounter,
   showVote,
 }: {
   active: GmTabId
@@ -99,15 +90,6 @@ export function GmTabBar({
     { id: 'dice', label: 'Кубы', hint: 'Бросок кубов', icon: <Dices size={18} /> },
     { id: 'tops', label: 'Топ', hint: 'Ручной рейтинг', icon: <Trophy size={18} /> },
   ]
-  if (showEncounter) {
-    tabs.push({
-      id: 'encounter',
-      label: 'Бой',
-      hint: 'Активный бой',
-      icon: <Swords size={18} />,
-      highlight: active !== 'encounter',
-    })
-  }
   if (showVote) {
     tabs.push({
       id: 'vote',

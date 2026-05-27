@@ -8,6 +8,7 @@ interface RoomHudProps {
   playerCount: number
   playerName: string
   isGm: boolean
+  levelLabel?: string | null
   copied: boolean
   onCopy: () => void
   onLeave: () => void
@@ -23,6 +24,7 @@ export function RoomHud({
   playerCount,
   playerName,
   isGm,
+  levelLabel,
   copied,
   onCopy,
   onLeave,
@@ -74,6 +76,17 @@ export function RoomHud({
             <span className="vng-dos-hud__label">Вы</span>
             <span className="vng-dos-hud__value truncate max-w-[10rem]">{playerName}</span>
           </div>
+          {levelLabel ? (
+            <>
+              <span className="vng-dos-hud__sep" aria-hidden>
+                │
+              </span>
+              <div className="vng-dos-hud__pair min-w-0">
+                <span className="vng-dos-hud__label">Уровень</span>
+                <span className="vng-dos-hud__value truncate max-w-[14rem]">{levelLabel}</span>
+              </div>
+            </>
+          ) : null}
           <div className="vng-dos-hud__actions ml-auto flex items-center gap-2 shrink-0">
             {onToggleTheme && showThemeToggle && (
               <button

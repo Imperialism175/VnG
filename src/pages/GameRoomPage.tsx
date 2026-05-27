@@ -1,18 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type TouchEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Crown, Home, Loader2 } from 'lucide-react'
+import { Crown, Home, Loader2, Menu } from 'lucide-react'
 import { RoomProvider, useRoom } from '@/context/RoomContext'
 import { apiGetRoomById } from '@/lib/api'
 import { fetchServerInfo, getInviteBaseUrl } from '@/lib/runtime'
 import { clearSession, copyToClipboard, loadSession } from '@/lib/utils'
 import { PartySheetBrowser } from '@/components/CharacterSheet/PartySheetBrowser'
 import { DiceRoller } from '@/components/DiceRoller/DiceRoller'
-import { EncounterBanner } from '@/components/Encounter/EncounterBanner'
-import { EncounterCard } from '@/components/Encounter/EncounterCard'
-import { EncounterEditor } from '@/components/Encounter/EncounterEditor'
 import { RoomMainLayout, RoomSideFeed } from '@/components/RoomLayout/RoomSideFeed'
 import { RoomPlayerRoster } from '@/components/RoomRoster/RoomPlayerRoster'
-import { playAnnounceCue, playBattleStartCue, resumeRoomAudio } from '@/lib/roomSounds'
+import { playAnnounceCue, resumeRoomAudio } from '@/lib/roomSounds'
 import { GMPanel } from '@/components/GMPanel/GMPanel'
 import { GmPlayerSheets } from '@/components/GmPlayerSheets/GmPlayerSheets'
 import { GmRoomTools } from '@/components/GmTools/GmRoomTools'
@@ -26,6 +23,10 @@ import { Button } from '@/components/ui/Button'
 import { RoomHud } from '@/components/RoomHud/RoomHud'
 import { ThemeColorEditor } from '@/components/RoomTheme/ThemeColorEditor'
 import { getRoomSessionStartMs } from '@/lib/sessionTime'
+import { getLevelPreset } from '@/lib/levels'
+import { getStatEffectForCharacterSheet } from '@/lib/characterSheets'
+
+const MOBILE_UI_SCALE_KEY = 'vng_mobile_ui_scale'
 
 export function GameRoomPage() {
   const { roomId: roomIdParam } = useParams<{ roomId: string }>()
@@ -88,20 +89,20 @@ export function GameRoomPage() {
 
 function GameRoomContent() {
   const {
-    room, session, players, characters, rollEvents, chatMessages, activeEncounter,
+    room, session, players, characters, rollEvents, chatMessages,
     myCharacter, loading, connected, error, myTheme, music, activePoll, screenMessage, hallOfFame,
     stageFx,
     roomTheme,
     saveCharacter, rollDice, rerollInspired, sendChat, transferGm,
-    publishEncounter, updateActiveEncounter, dismissEncounter, adjustPlayerHp,
+    adjustPlayerHp,
     adjustPlayerInspiration,
     setRoomTheme, clearPlayerTheme, setPersonalTheme, clearPersonalTheme,
     allowPlayerThemeEditing, setAllowPlayerThemeEditing,
+    levelId, levelVariant, setLevelPreset, showLevelToPlayers, setShowLevelToPlayers,
     setMusic, startPoll, castVote, endPoll, clearPoll,
     showScreenMessage, dismissScreenMessage, setHallOfFame,
     setStageFx, setPlayerFlashlight,
-    createNpcCharacter, deleteNpcCharacter,
-    presence, canRollDice, diceCooldownSec, setHandRaised, setDicePermission,
+    presence, canRollDice, diceCooldownSec, setHandRaised, pingPlayer,
   } = useRoom()
 
   const [playerTab, setPlayerTab] = useState<PlayerTabId>('sheet')
@@ -111,11 +112,22 @@ function GameRoomContent() {
   const [lanIps, setLanIps] = useState<string[]>([])
   const [dismissedScreenId, setDismissedScreenId] = useState<string | null>(null)
   const [themePanelOpen, setThemePanelOpen] = useState(false)
-  const lastEncounterId = useRef<string | null>(null)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [mobileUiScale, setMobileUiScale] = useState<number>(() => {
+    try {
+      const raw = window.localStorage.getItem(MOBILE_UI_SCALE_KEY)
+      const parsed = Number(raw)
+      return Number.isFinite(parsed) ? Math.max(0.85, Math.min(1.4, parsed)) : 1
+    } catch {
+      return 1
+    }
+  })
+  const touchStartXRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number | null>(null)
   const lastScreenSoundId = useRef<string | null>(null)
   const navigate = useNavigate()
 
-  const showEncounterTab = Boolean(activeEncounter)
+  const showEncounterTab = false
   const showVoteTab = Boolean(activePoll)
 
   useEffect(() => {
@@ -127,17 +139,6 @@ function GameRoomContent() {
     window.addEventListener('pointerdown', onGesture, { once: true })
     return () => window.removeEventListener('pointerdown', onGesture)
   }, [])
-
-  useEffect(() => {
-    const id = activeEncounter?.id ?? null
-    if (id && id !== lastEncounterId.current) {
-      lastEncounterId.current = id
-      playBattleStartCue()
-      if (session.isGm) setGmTab('encounter')
-      else setPlayerTab('encounter')
-    }
-    if (!id) lastEncounterId.current = null
-  }, [activeEncounter?.id, session.isGm])
 
   useEffect(() => {
     const msg = screenMessage
@@ -155,14 +156,44 @@ function GameRoomContent() {
   }, [allowPlayerThemeEditing, session.isGm, themePanelOpen])
 
   useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = () => {
+      if (mq.matches) setMobileNavOpen(false)
+    }
+    onChange()
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', onChange)
+      return () => mq.removeEventListener('change', onChange)
+    }
+    mq.addListener(onChange)
+    return () => mq.removeListener(onChange)
+  }, [])
+
+  useEffect(() => {
     if (activePoll?.open) {
       if (session.isGm) setGmTab('vote')
       else setPlayerTab('vote')
     }
   }, [activePoll?.id, activePoll?.open, session.isGm])
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MOBILE_UI_SCALE_KEY, String(mobileUiScale))
+    } catch {
+      /* ignore */
+    }
+  }, [mobileUiScale])
+
   const inviteUrl = getInviteBaseUrl()
   const sessionStartMs = getRoomSessionStartMs(room?.created_at)
+  const activeLevel = getLevelPreset(levelId)
+  const rawLevelLabel =
+    activeLevel
+      ? levelVariant === 'alt'
+        ? `${activeLevel.title} → ${activeLevel.altTitle}`
+        : activeLevel.title
+      : null
+  const levelLabel = session.isGm || showLevelToPlayers ? rawLevelLabel : null
 
   async function handleCopy() {
     const lines = [
@@ -211,9 +242,8 @@ function GameRoomContent() {
       myPlayerId={session.playerId}
       isGm={session.isGm}
       handsRaised={presence.handsRaised}
-      diceAllowed={presence.diceAllowed}
       onToggleHand={setHandRaised}
-      onSetDicePermission={setDicePermission}
+      onSignalPlayer={pingPlayer}
     />
   )
 
@@ -234,6 +264,17 @@ function GameRoomContent() {
     canRoll: canRollDice,
     cooldownSec: diceCooldownSec,
     isGm: session.isGm,
+    statOptions: (myCharacter?.stats ?? []).map((s) => s.name).filter(Boolean),
+    statValues: Object.fromEntries((myCharacter?.stats ?? []).map((s) => [s.name, s.value])),
+    statScaleValues: Object.fromEntries(
+      (myCharacter?.stats ?? []).map((s) => {
+        const statRaw = Number(s.value)
+        const effect = Number.isFinite(statRaw)
+          ? getStatEffectForCharacterSheet(myCharacter?.sheet_preset_id ?? null, myCharacter?.class_status ?? '', statRaw)
+          : null
+        return [s.name, typeof effect === 'number' && Number.isFinite(effect) ? effect : 0]
+      })
+    ),
     inspirationPoints: myCharacter?.counters.find((c) => /вдох|inspir/i.test(c.name))?.current ?? 0,
     onReroll: session.isGm
       ? undefined
@@ -249,29 +290,92 @@ function GameRoomContent() {
         },
   }
 
-  const encounterBanner = activeEncounter ? (
-    <EncounterBanner
-      encounter={activeEncounter}
-      showGmHint={session.isGm}
-      onOpen={() => (session.isGm ? setGmTab('encounter') : setPlayerTab('encounter'))}
-    />
-  ) : null
+  const encounterBanner = null
 
-  const tabPanelClass = 'h-full min-h-0 flex flex-col flex-1 lg:overflow-hidden'
+  const tabPanelClassMobile = 'min-h-0 flex flex-col flex-1 overflow-y-auto overflow-x-hidden lg:h-full lg:overflow-hidden'
 
-  const encounterView = activeEncounter && (
-    <div className={tabPanelClass}>
-      <EncounterCard
-        encounter={activeEncounter}
-        showDismiss={session.isGm}
-        onDismiss={dismissEncounter}
-        showGmNotes={session.isGm}
-      />
-    </div>
+  const handleMobileSwipeStart = (e: TouchEvent) => {
+    const touch = e.touches[0]
+    touchStartXRef.current = touch.clientX
+    touchStartYRef.current = touch.clientY
+  }
+
+  const handleMobileSwipeEnd = (e: TouchEvent) => {
+    const sx = touchStartXRef.current
+    const sy = touchStartYRef.current
+    touchStartXRef.current = null
+    touchStartYRef.current = null
+    if (sx === null || sy === null) return
+    const touch = e.changedTouches[0]
+    const dx = touch.clientX - sx
+    const dy = touch.clientY - sy
+    if (!mobileNavOpen && sx <= 32 && dx > 44 && Math.abs(dy) < 56) {
+      setMobileNavOpen(true)
+    } else if (mobileNavOpen && dx < -44 && Math.abs(dy) < 56) {
+      setMobileNavOpen(false)
+    }
+  }
+
+  const mobileSidebar = (
+    <aside
+      className={`vng-mobile-drawer lg:hidden ${mobileNavOpen ? 'vng-mobile-drawer--open' : ''}`}
+      aria-hidden={!mobileNavOpen}
+      onTouchStart={handleMobileSwipeStart}
+      onTouchEnd={handleMobileSwipeEnd}
+    >
+      <div className="vng-mobile-drawer__head">
+        <span className="text-xs font-bold uppercase tracking-wider">Панель комнаты</span>
+        <Button type="button" size="sm" variant="secondary" onClick={() => setMobileNavOpen(false)}>
+          Закрыть
+        </Button>
+      </div>
+      <div className="vng-mobile-drawer__zoom">
+        <span className="text-xs uppercase tracking-wider text-vng-muted">Масштаб интерфейса</span>
+        <div className="flex gap-2">
+          {[0.9, 1, 1.15, 1.3].map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={`vng-tui-btn text-xs ${Math.abs(mobileUiScale - value) < 0.01 ? 'vng-tui-btn--active' : ''}`}
+              onClick={() => setMobileUiScale(value)}
+            >
+              {Math.round(value * 100)}%
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="vng-mobile-drawer__tabs">
+        {session.isGm ? (
+          <GmTabBar
+            active={gmTab}
+            onChange={(next) => {
+              setGmTab(next)
+              setMobileNavOpen(false)
+            }}
+            showEncounter={showEncounterTab}
+            showVote={showVoteTab}
+          />
+        ) : (
+          <PlayerTabBar
+            active={playerTab}
+            onChange={(next) => {
+              setPlayerTab(next)
+              setMobileNavOpen(false)
+            }}
+            showEncounter={showEncounterTab}
+            showVote={showVoteTab}
+          />
+        )}
+      </div>
+      <div className="vng-mobile-drawer__content">
+        {playerRoster}
+        {sideFeed}
+      </div>
+    </aside>
   )
 
   const voteView = activePoll && (
-    <div className={tabPanelClass}>
+    <div className={tabPanelClassMobile}>
       <RoomPollPanel
         poll={activePoll}
         myPlayerId={session.playerId}
@@ -285,7 +389,7 @@ function GameRoomContent() {
   )
 
   const topsView = (
-    <div className={`${tabPanelClass} vng-retro-tab-content`}>
+      <div className={`${tabPanelClassMobile} vng-retro-tab-content`}>
       <RetroLeaderboard
         hall={hallOfFame}
         isGm={session.isGm}
@@ -301,6 +405,7 @@ function GameRoomContent() {
       stageFx={stageFx}
       viewerPlayerId={session.playerId}
       viewerIsGm={session.isGm}
+      mobileUiScale={mobileUiScale}
     >
       <RoomHud
         roomName={room?.name ?? 'Комната'}
@@ -309,6 +414,7 @@ function GameRoomContent() {
         playerCount={players.filter((p) => !p.is_gm).length}
         playerName={session.playerName}
         isGm={session.isGm}
+        levelLabel={levelLabel}
         copied={copied}
         onCopy={handleCopy}
         onLeave={handleLeave}
@@ -318,7 +424,7 @@ function GameRoomContent() {
       />
 
       {themePanelOpen && (
-        <div className="shrink-0 z-30 px-3 py-2 border-b border-vng-border max-w-[1600px] w-full mx-auto">
+        <div className="shrink-0 z-30 px-2 sm:px-3 py-2 border-b border-vng-border max-w-[1600px] w-full mx-auto overflow-x-hidden">
           {session.isGm || allowPlayerThemeEditing ? (
             <ThemeColorEditor
               title="Цвета только для вас"
@@ -345,21 +451,43 @@ function GameRoomContent() {
 
       <RoomMusicPlayback roomId={room?.id ?? ''} music={music} />
 
-      <main className="flex flex-1 flex-col min-h-0 max-w-[1600px] w-full mx-auto px-3 py-3">
-        <RoomMainLayout encounterBanner={encounterBanner} roster={playerRoster} sideFeed={sideFeed}>
-          <div className="flex flex-1 flex-col min-h-0 overflow-y-auto lg:overflow-hidden">
+      <div
+        className="lg:hidden shrink-0 max-w-[1600px] w-full mx-auto px-2 sm:px-3 pb-2 overflow-x-hidden"
+        onTouchStart={handleMobileSwipeStart}
+        onTouchEnd={handleMobileSwipeEnd}
+      >
+        <Button type="button" size="sm" variant="secondary" className="w-full" onClick={() => setMobileNavOpen(true)}>
+          <Menu size={16} /> Меню комнаты (вкладки / чат / игроки)
+        </Button>
+      </div>
+
+      {!mobileNavOpen && (
+        <div
+          className="vng-mobile-edge-swipe lg:hidden"
+          onTouchStart={handleMobileSwipeStart}
+          onTouchEnd={handleMobileSwipeEnd}
+          aria-hidden
+        />
+      )}
+      {mobileNavOpen && <div className="vng-mobile-drawer__backdrop lg:hidden" onClick={() => setMobileNavOpen(false)} />}
+      {mobileSidebar}
+
+      <main className="flex flex-1 flex-col min-h-0 max-w-[1600px] w-full mx-auto px-2 sm:px-3 py-2 sm:py-3 overflow-x-hidden">
+        <RoomMainLayout
+          encounterBanner={encounterBanner}
+          roster={<div className="hidden lg:flex h-full">{playerRoster}</div>}
+          sideFeed={<div className="hidden lg:flex h-full">{sideFeed}</div>}
+        >
+          <div className="flex flex-1 flex-col min-h-0 overflow-y-auto overflow-x-hidden lg:overflow-hidden">
           {session.isGm ? (
             <>
               {gmTab === 'players' && (
-                <div className={`${tabPanelClass} gap-3`}>
-                  <div className="flex-1 min-h-0 overflow-hidden">
+                <div className={`${tabPanelClassMobile} gap-3`}>
+                  <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
                     <GmPlayerSheets
                       players={players}
                       characters={characters}
-                      gmPlayerId={session.playerId}
                       onSave={saveCharacter}
-                      onCreateNpc={createNpcCharacter}
-                      onDeleteNpc={deleteNpcCharacter}
                     />
                   </div>
                   <div className="shrink-0 flex justify-end">
@@ -370,27 +498,15 @@ function GameRoomContent() {
                 </div>
               )}
               {gmTab === 'dice' && (
-                <div className={tabPanelClass}>
+                <div className={tabPanelClassMobile}>
                   <DiceRoller onRoll={rollDice} fillHeight {...diceRollerProps} />
                 </div>
               )}
               {gmTab === 'tops' && topsView}
-              {gmTab === 'encounter' && encounterView}
               {gmTab === 'vote' && voteView}
               {gmTab === 'gm' && (
-                <div className={`${tabPanelClass} gap-3 overflow-y-auto lg:overflow-hidden`}>
+                <div className={`${tabPanelClassMobile} gap-3`}>
                   <div className="flex-1 min-h-0 lg:overflow-y-auto flex flex-col gap-3">
-                    <div className="vng-encounter-editor-panel vng-encounter-editor-panel--primary shrink-0">
-                      <EncounterEditor
-                        activeEncounter={activeEncounter}
-                        onPublish={publishEncounter}
-                        onUpdate={updateActiveEncounter}
-                        onDismiss={dismissEncounter}
-                        compact
-                        fillHeight={false}
-                        prominent
-                      />
-                    </div>
                     <GmRoomTools
                       players={players}
                       roomTheme={roomTheme}
@@ -408,6 +524,11 @@ function GameRoomContent() {
                       onSetPlayerFlashlight={setPlayerFlashlight}
                       allowPlayerThemeEditing={allowPlayerThemeEditing}
                       onSetAllowPlayerThemeEditing={setAllowPlayerThemeEditing}
+                      levelId={levelId}
+                      levelVariant={levelVariant}
+                      onSetLevelPreset={setLevelPreset}
+                      showLevelToPlayers={showLevelToPlayers}
+                      onSetShowLevelToPlayers={setShowLevelToPlayers}
                     />
                   </div>
                   <Button variant="secondary" className="shrink-0" onClick={() => setShowGmPanel(true)}>
@@ -419,7 +540,7 @@ function GameRoomContent() {
           ) : (
             <>
               {playerTab === 'sheet' && (
-                <div className={tabPanelClass}>
+                <div className={tabPanelClassMobile}>
                   <PartySheetBrowser
                     viewerPlayerId={session.playerId}
                     viewerIsGm={false}
@@ -432,30 +553,31 @@ function GameRoomContent() {
                 </div>
               )}
               {playerTab === 'dice' && (
-                <div className={tabPanelClass}>
+                <div className={tabPanelClassMobile}>
                   <DiceRoller onRoll={rollDice} fillHeight {...diceRollerProps} />
                 </div>
               )}
               {playerTab === 'tops' && topsView}
-              {playerTab === 'encounter' && encounterView}
               {playerTab === 'vote' && voteView}
             </>
           )}
-          {session.isGm ? (
-            <GmTabBar
-              active={gmTab}
-              onChange={setGmTab}
-              showEncounter={showEncounterTab}
-              showVote={showVoteTab}
-            />
-          ) : (
-            <PlayerTabBar
-              active={playerTab}
-              onChange={setPlayerTab}
-              showEncounter={showEncounterTab}
-              showVote={showVoteTab}
-            />
-          )}
+          <div className="hidden lg:block">
+            {session.isGm ? (
+              <GmTabBar
+                active={gmTab}
+                onChange={setGmTab}
+                showEncounter={showEncounterTab}
+                showVote={showVoteTab}
+              />
+            ) : (
+              <PlayerTabBar
+                active={playerTab}
+                onChange={setPlayerTab}
+                showEncounter={showEncounterTab}
+                showVote={showVoteTab}
+              />
+            )}
+          </div>
           </div>
         </RoomMainLayout>
       </main>
@@ -465,9 +587,6 @@ function GameRoomContent() {
           players={players}
           characters={characters}
           currentGmId={session.playerId}
-          roomId={room.id}
-          onPublishEncounter={publishEncounter}
-          onClearEncounter={dismissEncounter}
           onTransferGm={transferGm}
           onAdjustHp={adjustPlayerHp}
           onAdjustInspiration={adjustPlayerInspiration}

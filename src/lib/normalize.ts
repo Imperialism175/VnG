@@ -49,13 +49,24 @@ export type ServerMessage =
   | { type: 'ENCOUNTER_UPDATE'; encounter: Encounter | null }
   | { type: 'ROOM_EXTRAS_UPDATE'; extras: Record<string, unknown> }
   | { type: 'PRESENCE_UPDATE'; hands_raised: string[]; dice_allowed: string[] }
+  | { type: 'PLAYER_SIGNAL'; target_player_id: string; from_player_id: string; from_name: string }
   | { type: 'ERROR'; message: string }
 
 export type ClientMessage =
   | { type: 'UPDATE_CHARACTER'; character: Character }
   | { type: 'CREATE_NPC_CHARACTER'; name: string }
   | { type: 'DELETE_NPC_CHARACTER'; player_id: string }
-  | { type: 'DICE_ROLL'; expression?: string; count?: number; sides?: number; modifier?: number }
+  | {
+      type: 'DICE_ROLL'
+      expression?: string
+      count?: number
+      sides?: number
+      modifier?: number
+      scale_stat_name?: string | null
+      scale_stat_value?: number | null
+      ability_level?: number | null
+      desired_ability_level?: number | null
+    }
   | { type: 'DICE_REROLL_INSPIRED'; expression?: string; count?: number; sides?: number; modifier?: number }
   | { type: 'CHAT_MESSAGE'; text: string }
   | { type: 'CHANGE_GM'; new_gm_id: string }
@@ -67,7 +78,7 @@ export type ClientMessage =
   | { type: 'CLEAR_MY_THEME' }
   | { type: 'CLEAR_PLAYER_THEME'; target_player_id: string }
   | { type: 'SET_MUSIC'; url?: string | null; playing?: boolean }
-  | { type: 'START_POLL'; question: string; options: string[] }
+  | { type: 'START_POLL'; question: string; options: string[]; duration_sec?: number }
   | { type: 'CAST_VOTE'; option_id: string }
   | { type: 'END_POLL' }
   | { type: 'CLEAR_POLL' }
@@ -76,8 +87,11 @@ export type ClientMessage =
   | { type: 'SET_HALL_OF_FAME'; hall_of_fame: { title: string; entries: { id: string; name: string; label?: string }[] } }
   | { type: 'SET_STAGE_FX'; darkness: number; flashlights_enabled_for?: string[] }
   | { type: 'SET_ALLOW_PLAYER_THEME_EDITING'; enabled: boolean }
+  | { type: 'SET_LEVEL_PRESET'; level_id: string | null; variant?: 'main' | 'alt' }
+  | { type: 'SET_LEVEL_VISIBILITY'; show_to_players: boolean }
   | { type: 'SET_HAND_RAISED'; raised: boolean }
   | { type: 'SET_DICE_PERMISSION'; player_id: string; allowed: boolean }
+  | { type: 'PING_PLAYER'; player_id: string }
 
 export function normalizeCharacter(raw: Record<string, unknown>): Character {
   return {
@@ -90,6 +104,10 @@ export function normalizeCharacter(raw: Record<string, unknown>): Character {
     class_status: (raw.class_status ?? raw.classStatus ?? '') as string,
     description: (raw.description as string) ?? '',
     text_fields: (raw.text_fields ?? raw.textFields ?? []) as TextField[],
+    special_field_locks: Array.isArray(raw.special_field_locks ?? raw.specialFieldLocks)
+      ? ((raw.special_field_locks ?? raw.specialFieldLocks) as unknown[]).map((v) => String(v))
+      : [],
+    stat_points_locked: Boolean(raw.stat_points_locked ?? raw.statPointsLocked),
     stats: (raw.stats ?? []) as StatField[],
     counters: (raw.counters ?? []) as CounterField[],
     is_npc: Boolean(raw.is_npc ?? raw.isNpc) || String(raw.player_id ?? raw.playerId ?? '').startsWith('npc-'),
@@ -129,6 +147,31 @@ export function normalizeRollEvent(raw: Record<string, unknown>): RollEvent {
     rolls: Array.isArray(raw.rolls) ? (raw.rolls as number[]) : undefined,
     modifier: typeof raw.modifier === 'number' ? raw.modifier : undefined,
     sides: typeof raw.sides === 'number' ? raw.sides : null,
+    scale_stat_name: (raw.scale_stat_name ?? raw.scaleStatName ?? null) as string | null,
+    scale_stat_value:
+      typeof raw.scale_stat_value === 'number'
+        ? raw.scale_stat_value
+        : typeof raw.scaleStatValue === 'number'
+          ? raw.scaleStatValue
+          : null,
+    ability_level:
+      typeof raw.ability_level === 'number'
+        ? raw.ability_level
+        : typeof raw.abilityLevel === 'number'
+          ? raw.abilityLevel
+          : null,
+    ability_usable:
+      typeof raw.ability_usable === 'boolean'
+        ? raw.ability_usable
+        : typeof raw.abilityUsable === 'boolean'
+          ? raw.abilityUsable
+          : null,
+    reroll_inspiration:
+      typeof raw.reroll_inspiration === 'boolean'
+        ? raw.reroll_inspiration
+        : typeof raw.rerollInspiration === 'boolean'
+          ? raw.rerollInspiration
+          : false,
   }
 }
 

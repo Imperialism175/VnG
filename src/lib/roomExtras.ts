@@ -11,6 +11,9 @@ export interface RoomExtrasState {
   hallOfFame: HallOfFame
   stageFx: RoomStageFx
   allowPlayerThemeEditing: boolean
+  levelId: string | null
+  levelVariant: 'main' | 'alt'
+  showLevelToPlayers: boolean
 }
 
 export const EMPTY_EXTRAS: RoomExtrasState = {
@@ -22,6 +25,9 @@ export const EMPTY_EXTRAS: RoomExtrasState = {
   hallOfFame: { title: 'ЗАЛ СЛАВЫ', entries: [] },
   stageFx: { darkness: 100, flashlightsEnabledFor: [] },
   allowPlayerThemeEditing: true,
+  levelId: null,
+  levelVariant: 'main',
+  showLevelToPlayers: false,
 }
 
 function sanitizeHex(v: unknown, fallback: string): string {
@@ -70,6 +76,11 @@ export function normalizePoll(raw: unknown): RoomPoll | null {
     votes: (p.votes as Record<string, string>) ?? {},
     open: Boolean(p.open),
     created_at: String(p.created_at ?? p.createdAt ?? ''),
+    duration_sec:
+      Number.isFinite(Number(p.duration_sec ?? p.durationSec)) && Number(p.duration_sec ?? p.durationSec) > 0
+        ? Math.round(Number(p.duration_sec ?? p.durationSec))
+        : null,
+    ends_at: typeof (p.ends_at ?? p.endsAt) === 'string' ? String(p.ends_at ?? p.endsAt) : null,
   }
 }
 
@@ -113,5 +124,11 @@ export function parseRoomExtras(state: Record<string, unknown>): RoomExtrasState
         : [],
     },
     allowPlayerThemeEditing: state.allow_player_theme_editing !== false && state.allowPlayerThemeEditing !== false,
+    levelId: typeof state.level_id === 'string' ? state.level_id : typeof state.levelId === 'string' ? state.levelId : null,
+    levelVariant:
+      state.level_variant === 'alt' || state.levelVariant === 'alt'
+        ? 'alt'
+        : 'main',
+    showLevelToPlayers: state.show_level_to_players === true || state.showLevelToPlayers === true,
   }
 }

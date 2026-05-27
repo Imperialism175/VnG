@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { FlashlightOff, Flashlight, Music, Vote, MessageSquareQuote } from 'lucide-react'
 import type { Player, RoomMusic, RoomTheme } from '@/types'
+import { apiGetPlaylistEntries, type PlaylistEntry } from '@/lib/api'
 import { parseYoutubeVideoId } from '@/lib/youtube'
+import { LEVEL_PRESETS, type LevelVariant } from '@/lib/levels'
 import { ThemeColorEditor } from '@/components/RoomTheme/ThemeColorEditor'
 import { Button, Input, Textarea } from '@/components/ui/Button'
 
@@ -12,7 +14,7 @@ interface GmRoomToolsProps {
   onSetTheme: (target: 'all' | string, theme: RoomTheme, clearOverrides?: boolean) => void
   onClearPlayerTheme: (playerId: string) => void
   onSetMusic: (url: string | null, playing: boolean) => void
-  onStartPoll: (question: string, options: string[]) => void
+  onStartPoll: (question: string, options: string[], durationSec?: number) => void
   onShowScreenMessage: (opts: { title: string; text: string; targetPlayerId: string | null }) => void
   onDismissScreenMessage: () => void
   hasScreenMessage: boolean
@@ -22,6 +24,11 @@ interface GmRoomToolsProps {
   onSetPlayerFlashlight: (playerId: string, enabled: boolean) => void
   allowPlayerThemeEditing: boolean
   onSetAllowPlayerThemeEditing: (enabled: boolean) => void
+  levelId: string | null
+  levelVariant: LevelVariant
+  onSetLevelPreset: (levelId: string | null, variant: LevelVariant) => void
+  showLevelToPlayers: boolean
+  onSetShowLevelToPlayers: (show: boolean) => void
 }
 
 export function GmRoomTools({
@@ -41,18 +48,49 @@ export function GmRoomTools({
   onSetPlayerFlashlight,
   allowPlayerThemeEditing,
   onSetAllowPlayerThemeEditing,
+  levelId,
+  levelVariant,
+  onSetLevelPreset,
+  showLevelToPlayers,
+  onSetShowLevelToPlayers,
 }: GmRoomToolsProps) {
   const roster = players.filter((p) => !p.is_gm)
   const [themeTarget, setThemeTarget] = useState<'all' | string>('all')
   const [musicUrl, setMusicUrl] = useState(music.url ?? '')
   const [pollQ, setPollQ] = useState('')
   const [pollOpts, setPollOpts] = useState('Да\nНет')
+  const [pollTimerSec, setPollTimerSec] = useState('0')
   const [msgTitle, setMsgTitle] = useState('')
   const [msgText, setMsgText] = useState('')
   const [msgTarget, setMsgTarget] = useState<'all' | string>('all')
+  const [playlistUrl, setPlaylistUrl] = useState('')
+  const [playlistEntries, setPlaylistEntries] = useState<PlaylistEntry[]>([])
+  const [playlistLoading, setPlaylistLoading] = useState(false)
+  const [playlistError, setPlaylistError] = useState<string | null>(null)
+  const [selectedPlaylistTrackUrl, setSelectedPlaylistTrackUrl] = useState('')
 
   const videoPreview = parseYoutubeVideoId(musicUrl)
   const isDirectAudio = /\.(mp3|ogg|opus|wav|m4a|aac|flac|webm)(\?|$)/i.test(musicUrl.trim())
+
+  async function handleLoadPlaylist() {
+    const url = playlistUrl.trim()
+    if (!url) return
+    setPlaylistLoading(true)
+    setPlaylistError(null)
+    try {
+      const result = await apiGetPlaylistEntries(url)
+      setPlaylistEntries(result.entries)
+      const firstUrl = result.entries[0]?.url ?? ''
+      setSelectedPlaylistTrackUrl(firstUrl)
+      if (firstUrl) setMusicUrl(firstUrl)
+    } catch (err) {
+      setPlaylistEntries([])
+      setSelectedPlaylistTrackUrl('')
+      setPlaylistError(err instanceof Error ? err.message : 'Не удалось загрузить плейлист')
+    } finally {
+      setPlaylistLoading(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4 shrink-0">
@@ -107,6 +145,47 @@ export function GmRoomTools({
       </section>
 
       <section className="vng-panel p-3 space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-vng-muted">Уровень сцены</h3>
+        <select
+          value={levelId ?? ''}
+          onChange={(e) => onSetLevelPreset(e.target.value || null, levelVariant)}
+          className="w-full px-2 py-1.5 text-sm bg-vng-bg border border-vng-border"
+        >
+          <option value="">Без выбранного уровня</option>
+          {LEVEL_PRESETS.map((level) => (
+            <option key={level.id} value={level.id}>
+              {level.title} ({level.altTitle})
+            </option>
+          ))}
+        </select>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-vng-muted shrink-0">Режим:</span>
+          <select
+            value={levelVariant}
+            onChange={(e) => onSetLevelPreset(levelId, (e.target.value === 'alt' ? 'alt' : 'main'))}
+            className="flex-1 px-2 py-1.5 text-sm bg-vng-bg border border-vng-border"
+          >
+            <option value="main">Основная сцена</option>
+            <option value="alt">Альтернатива</option>
+          </select>
+        </div>
+        <p className="text-[11px] text-vng-muted">
+          При выборе уровня цветовая палитра комнаты подстраивается автоматически.
+        </p>
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-vng-border">
+          <span className="text-xs text-vng-muted">Показывать уровень игрокам</span>
+          <Button
+            type="button"
+            size="sm"
+            variant={showLevelToPlayers ? 'secondary' : 'ghost'}
+            onClick={() => onSetShowLevelToPlayers(!showLevelToPlayers)}
+          >
+            {showLevelToPlayers ? 'ВКЛ' : 'ВЫКЛ'}
+          </Button>
+        </div>
+      </section>
+
+      <section className="vng-panel p-3 space-y-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-vng-muted flex items-center gap-1.5">
           <Music size={14} className="text-vng-amber" /> Музыка (YouTube)
         </h3>
@@ -151,6 +230,67 @@ export function GmRoomTools({
             Стоп
           </Button>
         </div>
+        <div className="border-t border-vng-border pt-2 space-y-2">
+          <Input
+            label="Плейлист (YouTube URL)"
+            value={playlistUrl}
+            onChange={(e) => setPlaylistUrl(e.target.value)}
+            placeholder="https://www.youtube.com/playlist?list=..."
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="secondary" onClick={() => void handleLoadPlaylist()} disabled={!playlistUrl.trim() || playlistLoading}>
+              {playlistLoading ? 'Загрузка...' : 'Загрузить треки'}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setPlaylistEntries([])
+                setSelectedPlaylistTrackUrl('')
+                setPlaylistError(null)
+              }}
+              disabled={playlistLoading || playlistEntries.length === 0}
+            >
+              Очистить список
+            </Button>
+          </div>
+          {playlistError && <p className="text-xs text-vng-danger">{playlistError}</p>}
+          {playlistEntries.length > 0 && (
+            <>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-vng-muted uppercase">Трек из плейлиста</span>
+                <select
+                  className="w-full px-2 py-1.5 text-sm bg-vng-bg border border-vng-border"
+                  value={selectedPlaylistTrackUrl}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setSelectedPlaylistTrackUrl(next)
+                    setMusicUrl(next)
+                  }}
+                >
+                  {playlistEntries.map((entry) => (
+                    <option key={entry.id} value={entry.url}>
+                      {entry.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  if (!selectedPlaylistTrackUrl) return
+                  setMusicUrl(selectedPlaylistTrackUrl)
+                  onSetMusic(selectedPlaylistTrackUrl, true)
+                }}
+                disabled={!selectedPlaylistTrackUrl}
+              >
+                ▶ Включить выбранный трек
+              </Button>
+            </>
+          )}
+        </div>
       </section>
 
       <section className="vng-panel p-3 space-y-2">
@@ -164,10 +304,19 @@ export function GmRoomTools({
           onChange={(e) => setPollOpts(e.target.value)}
           rows={3}
         />
+        <Input
+          label="Таймер (секунды, 0 = без лимита)"
+          type="number"
+          min={0}
+          max={7200}
+          value={pollTimerSec}
+          onChange={(e) => setPollTimerSec(e.target.value)}
+          placeholder="0"
+        />
         <Button
           type="button"
           size="sm"
-          onClick={() => onStartPoll(pollQ, pollOpts.split('\n'))}
+          onClick={() => onStartPoll(pollQ, pollOpts.split('\n'), Math.max(0, Number(pollTimerSec) || 0))}
           disabled={!pollQ.trim()}
         >
           Запустить

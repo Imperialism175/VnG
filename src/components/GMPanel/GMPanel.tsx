@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Crown, Users, X } from 'lucide-react'
-import type { Character, Encounter, Player } from '@/types'
+import type { Character, Player } from '@/types'
 import { isNpcPlayerId } from '@/lib/rollFeed'
 import { Panel } from '@/components/ui/Panel'
 import { Button } from '@/components/ui/Button'
@@ -9,13 +9,10 @@ interface GMPanelProps {
   players: Player[]
   characters: Character[]
   currentGmId: string
-  onPublishEncounter: (encounter: Omit<Encounter, 'room_id' | 'is_active'>) => void
-  onClearEncounter: () => void
   onTransferGm: (newGmId: string) => void
   onAdjustHp: (playerId: string, delta: number) => void
   onAdjustInspiration: (playerId: string, delta: number) => void
   onClose: () => void
-  roomId: string
 }
 
 interface RosterEntry {
@@ -108,7 +105,6 @@ export function GMPanel({
                       <p className="font-semibold text-sm truncate">{displayName}</p>
                       <p className="text-xs text-vng-muted truncate">
                         {entry.playerName}
-                        {char?.class_status ? ` · ${char.class_status}` : ''}
                       </p>
                       {hp && (
                         <p className="text-xs font-mono text-vng-green mt-1">

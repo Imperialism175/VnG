@@ -1,4 +1,5 @@
-import { BarChart3 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BarChart3, Timer } from 'lucide-react'
 import type { Player, RoomPoll } from '@/types'
 import { Panel } from '@/components/ui/Panel'
 import { Button } from '@/components/ui/Button'
@@ -16,10 +17,31 @@ interface RoomPollPanelProps {
 export function RoomPollPanel({ poll, myPlayerId, players, isGm, onVote, onEnd, onClear }: RoomPollPanelProps) {
   const myVote = poll.votes[myPlayerId]
   const totalVotes = Object.keys(poll.votes).length
+  const [now, setNow] = useState(() => Date.now())
+  const endsAtMs = poll.ends_at ? new Date(poll.ends_at).getTime() : null
+  const remainingMs = endsAtMs ? Math.max(0, endsAtMs - now) : null
+
+  useEffect(() => {
+    if (!poll.open || !endsAtMs) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [poll.open, endsAtMs])
+
+  const formatRemaining = (ms: number) => {
+    const sec = Math.max(0, Math.ceil(ms / 1000))
+    const mm = Math.floor(sec / 60)
+    const ss = sec % 60
+    return `${mm}:${String(ss).padStart(2, '0')}`
+  }
 
   return (
     <Panel title="Голосование" icon={<BarChart3 size={16} />} fillHeight className="min-h-0">
       <p className="text-sm font-medium mb-4 vng-display text-vng-text">{poll.question}</p>
+      {poll.open && remainingMs !== null && (
+        <p className="text-xs text-vng-muted mb-3 flex items-center gap-1">
+          <Timer size={12} /> До авто-завершения: <span className="text-vng-amber font-semibold">{formatRemaining(remainingMs)}</span>
+        </p>
+      )}
       <div className="flex flex-col gap-2">
         {poll.options.map((opt) => {
           const count = Object.values(poll.votes).filter((v) => v === opt.id).length

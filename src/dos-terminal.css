@@ -550,7 +550,7 @@ textarea[class*="border-vng"] {
 
 .vng-feed-roll--crit,
 .vng-feed-roll--crit .vng-roll-total {
-  animation: vng-dos-blink 0.55s step-end infinite !important;
+  animation: vng-dos-blink 0.55s step-end 3 !important;
   border-left-color: var(--vng-dos-fg) !important;
   background: var(--vng-dos-bg) !important;
 }
@@ -1102,16 +1102,19 @@ textarea[class*="border-vng"] {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
+  overflow-x: clip;
 }
 
 .vng-room-layout__body {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
+  overflow-x: clip;
 }
 
 .vng-room-layout__main {
   overflow: hidden;
+  overflow-x: clip;
 }
 
 .vng-room-layout__roster,
@@ -1262,6 +1265,327 @@ textarea[class*="border-vng"] {
 .vng-room-sidefeed__body .vng-panel-header {
   flex-shrink: 0;
 }
+
+/* ── Mobile drawer (tabs/chat/roster) ── */
+.vng-mobile-drawer__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  background: rgb(0 0 0 / 0.56);
+}
+
+.vng-mobile-edge-swipe {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  z-index: 64;
+}
+
+.vng-mobile-drawer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: min(90vw, 25rem);
+  max-width: 100%;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--vng-dos-fg);
+  background: color-mix(in srgb, var(--vng-dos-bg) 88%, transparent);
+  backdrop-filter: blur(4px);
+  box-shadow: 6px 0 0 rgb(0 0 0 / 0.35);
+  transform: translateX(-102%);
+  transition: transform 180ms ease-out;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vng-mobile-drawer--open {
+  transform: translateX(0);
+}
+
+.vng-mobile-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--vng-dos-muted);
+  flex-shrink: 0;
+}
+
+.vng-mobile-drawer__tabs {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--vng-dos-muted);
+  flex-shrink: 0;
+}
+
+.vng-mobile-drawer__zoom {
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--vng-dos-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.vng-mobile-drawer__zoom .vng-tui-btn {
+  flex: 1 1 0;
+  min-height: 2.5rem;
+}
+
+.vng-mobile-drawer__zoom .vng-tui-btn--active {
+  background: var(--vng-dos-fg) !important;
+  color: var(--vng-dos-bg) !important;
+}
+
+.vng-mobile-drawer__tabs .vng-retro-tabbar {
+  border-top: none !important;
+}
+
+.vng-mobile-drawer__content {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.6rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vng-mobile-drawer__content .vng-room-roster,
+.vng-mobile-drawer__content .vng-room-sidefeed {
+  min-height: 18rem;
+}
+
+.vng-mobile-drawer__content .vng-room-roster {
+  height: clamp(19rem, 40vh, 26rem);
+}
+
+.vng-mobile-drawer__content .vng-room-sidefeed {
+  height: clamp(22rem, 48vh, 30rem);
+}
+
+.vng-mobile-drawer__content .vng-room-roster__list,
+.vng-mobile-drawer__content .vng-room-sidefeed__body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Mobile readability / tap targets ── */
+@media (max-width: 768px) {
+  html,
+  body,
+  #root,
+  .vng-page,
+  .vng-room-shell {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .vng-room-shell * {
+    max-width: 100%;
+  }
+
+  .vng-room-shell {
+    font-size: calc(20px * var(--vng-mobile-ui-scale, 1));
+  }
+
+  .vng-dos-hud__label,
+  .vng-dos-hud__value,
+  .vng-panel-header h2,
+  .vng-terminal-panel .vng-panel-header h2,
+  .vng-room-roster__head,
+  .vng-room-sidefeed__head,
+  .vng-retro-tab__label {
+    font-size: 1.08rem !important;
+  }
+
+  .vng-room-shell .text-xs,
+  .vng-room-shell .text-sm,
+  .vng-room-shell .text-base,
+  .vng-room-shell .vng-feed-scroll,
+  .vng-room-shell .vng-hp-text {
+    font-size: 1.06rem !important;
+    line-height: 1.45;
+  }
+
+  .vng-retro-tab {
+    min-height: 3.6rem;
+    padding-top: 0.64rem !important;
+    padding-bottom: 0.64rem !important;
+  }
+
+  .vng-tui-btn,
+  .vng-btn-arcade,
+  .vng-roll-cta,
+  .vng-room-shell button {
+    min-height: 3.35rem;
+    font-size: 1.08rem !important;
+    padding-top: 0.58rem !important;
+    padding-bottom: 0.58rem !important;
+  }
+
+  .vng-room-shell input,
+  .vng-room-shell select,
+  .vng-room-shell textarea,
+  .vng-tui-input,
+  .vng-tui-textarea,
+  .vng-terminal-input {
+    min-height: 3.3rem;
+    font-size: 18px !important;
+  }
+
+  .vng-room-roster__row {
+    min-height: 3.35rem;
+    padding-top: 0.58rem;
+    padding-bottom: 0.58rem;
+  }
+
+  .vng-dice-stepper__btn {
+    width: 2.9rem;
+    height: 2.9rem;
+    font-size: 1.08rem !important;
+  }
+
+  .vng-room-shell .vng-counter-block,
+  .vng-room-shell .vng-stat-tile {
+    padding: 0.7rem !important;
+  }
+
+  .vng-room-shell .vng-panel-header {
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+  }
+
+  .vng-mobile-drawer {
+    width: min(94vw, 28rem);
+  }
+
+  .vng-dos-hud__actions {
+    width: 100%;
+    margin-left: 0 !important;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .vng-room-layout__body {
+    display: block;
+    overflow-x: hidden;
+  }
+
+  .vng-room-layout,
+  .vng-room-layout__body,
+  .vng-room-layout__main,
+  .vng-room-layout__roster,
+  .vng-room-layout__side,
+  .vng-room-sidefeed,
+  .vng-room-roster,
+  .vng-panel,
+  .vng-card {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .vng-room-layout,
+  .vng-room-layout__body,
+  .vng-room-layout__main {
+    overflow: visible !important;
+  }
+
+  .vng-terminal-line__body,
+  .vng-feed-roll,
+  .vng-feed-chat {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .vng-mobile-drawer__content .vng-room-roster,
+  .vng-mobile-drawer__content .vng-room-sidefeed {
+    min-height: 19rem;
+  }
+
+  .vng-mobile-drawer__content .vng-room-roster {
+    height: clamp(20rem, 42vh, 28rem);
+  }
+
+  .vng-mobile-drawer__content .vng-room-sidefeed {
+    height: clamp(24rem, 52vh, 34rem);
+  }
+
+  .vng-encounter-editor-panel td {
+    white-space: normal !important;
+  }
+}
+
+/* ── Home page mobile readability ── */
+@media (max-width: 768px) {
+  .vng-home-page {
+    font-size: 18px;
+  }
+
+  .vng-home-hero {
+    padding-top: 1.1rem !important;
+    padding-bottom: 1.1rem !important;
+  }
+
+  .vng-home-hero__title {
+    font-size: 1.6rem !important;
+    line-height: 1.15;
+    letter-spacing: 0.08em !important;
+  }
+
+  .vng-home-hero__subtitle,
+  .vng-home-hero__status {
+    font-size: 0.95rem !important;
+    line-height: 1.35;
+  }
+
+  .vng-home-main {
+    padding-top: 1rem !important;
+    gap: 0.85rem !important;
+  }
+
+  .vng-home-card,
+  .vng-home-room-card {
+    padding: 0.9rem !important;
+  }
+
+  .vng-home-page .vng-tui-field__label,
+  .vng-home-help,
+  .vng-home-page .text-vng-muted {
+    font-size: 0.95rem !important;
+  }
+
+  .vng-home-input,
+  .vng-home-page input,
+  .vng-home-page select,
+  .vng-home-page textarea {
+    min-height: 3.2rem !important;
+    font-size: 18px !important;
+  }
+
+  .vng-home-action,
+  .vng-home-page .vng-tui-btn,
+  .vng-home-page button {
+    min-height: 3.2rem;
+    font-size: 1.1rem !important;
+  }
+
+  .vng-home-action .text-xs {
+    font-size: 0.85rem !important;
+  }
+
+  .vng-home-section-title {
+    font-size: 1.2rem !important;
+  }
+}
+
 
 .vng-encounter-banner {
   display: block;

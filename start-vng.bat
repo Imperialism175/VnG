@@ -1,4 +1,6 @@
 @echo off
 cd /d "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\start-vng.ps1"
-if errorlevel 1 pause
+title VnG Launcher
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\start-vng-hidden.ps1"
+echo.
+pause

@@ -28,6 +28,10 @@ export interface Character {
   class_status: string
   description: string
   text_fields: TextField[]
+  /** id полей из text_fields, которые заблокированы ГМ для владельца */
+  special_field_locks?: string[]
+  /** Запрет владельцу вкладывать очки характеристик и менять статы */
+  stat_points_locked?: boolean
   stats: StatField[]
   counters: CounterField[]
   /** Лист NPC/персонажа без игрока в сети — создаёт ГМ */
@@ -78,6 +82,11 @@ export interface RollEvent {
   rolls?: number[]
   modifier?: number
   sides?: number | null
+  scale_stat_name?: string | null
+  scale_stat_value?: number | null
+  ability_level?: number | null
+  ability_usable?: boolean | null
+  reroll_inspiration?: boolean
 }
 
 export interface ChatMessage {
@@ -168,6 +177,8 @@ export interface RoomPoll {
   votes: Record<string, string>
   open: boolean
   created_at: string
+  duration_sec?: number | null
+  ends_at?: string | null
 }
 
 export interface ScreenMessage {

@@ -1,4 +1,4 @@
-export const DICE_ROLL_COOLDOWN_MS = 5000
+export const DICE_ROLL_COOLDOWN_MS = 2000
 
 export function diceCooldownRemainingMs(lastRollAtMs: number, now = Date.now()): number {
   if (!lastRollAtMs) return 0

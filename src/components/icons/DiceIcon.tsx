@@ -16,12 +16,15 @@ export function DiceIcon({ sides, size = 28, className = '' }: DiceIconProps) {
     switch (sides) {
       case 3:
         return (
-          <polygon
-            points={`${s / 2},${s * 0.2} ${s * 0.82},${s * 0.75} ${s * 0.18},${s * 0.75}`}
+          <rect
+            x={s * 0.2}
+            y={s * 0.2}
+            width={s * 0.6}
+            height={s * 0.6}
+            rx={2}
             fill="none"
             stroke={stroke}
             strokeWidth={sw}
-            strokeLinejoin="round"
           />
         )
       case 4:

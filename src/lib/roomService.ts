@@ -222,8 +222,13 @@ export function createEmptyCharacter(roomId: string, playerId: string, playerNam
     class_status: '',
     description: '',
     text_fields: [],
-    stats: [],
-    counters: [{ id: generateId(), name: 'Здоровье', current: 10, max: 10 }],
+    special_field_locks: [],
+    stat_points_locked: false,
+    stats: [{ id: generateId(), name: 'ХП', value: '0' }],
+    counters: [
+      { id: generateId(), name: 'Здоровье', current: 0, max: 0 },
+      { id: generateId(), name: 'Очки вдохновения', current: 0, max: 99 },
+    ],
   }
 }
 

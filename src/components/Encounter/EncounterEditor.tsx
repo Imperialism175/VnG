@@ -66,7 +66,13 @@ export function EncounterEditor({
   }
 
   function handlePublish() {
-    const payload = syncLegacyHp({ ...draft, id: draft.id || generateId() } as Encounter)
+    const payload = syncLegacyHp({
+      ...draft,
+      id: draft.id || generateId(),
+      enemies: draft.image_url ? [] : draft.enemies,
+      enemy_hp: draft.image_url ? null : draft.enemy_hp,
+      enemy_hp_max: draft.image_url ? null : draft.enemy_hp_max,
+    } as Encounter)
     onPublish(payload)
   }
 
@@ -76,6 +82,7 @@ export function EncounterEditor({
   }
 
   const isLive = Boolean(activeEncounter)
+  const hasSceneImage = Boolean(draft.image_url?.trim())
 
   return (
     <div className={prominent ? 'vng-encounter-editor-prominent' : undefined}>
@@ -149,6 +156,7 @@ export function EncounterEditor({
           placeholder="Найти выход, защитить NPC…"
         />
 
+        {!hasSceneImage && (
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold uppercase text-vng-muted flex items-center gap-1">
@@ -248,6 +256,12 @@ export function EncounterEditor({
             ))}
           </div>
         </div>
+        )}
+        {hasSceneImage && (
+          <p className="text-xs text-vng-muted border border-vng-border px-2 py-2">
+            При включённой картинке режим боя отключается: список противников не используется.
+          </p>
+        )}
 
         <Textarea
           label="Заметки ГМ (только вы)"

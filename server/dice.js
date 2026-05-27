@@ -1,5 +1,6 @@
 const DICE_PATTERN = /(\d*)d(\d+)/gi
 const ALLOWED = [3, 4, 6, 8, 10, 12, 20, 100]
+const MAX_DICE_PER_ROLL = 10
 
 function rollDie(sides) {
   return Math.floor(Math.random() * sides) + 1
@@ -26,6 +27,9 @@ export function parseAndRoll(expression) {
     const count = match[1] ? parseInt(match[1], 10) : 1
     const sides = parseInt(match[2], 10)
     if (!ALLOWED.includes(sides)) throw new Error(`Куб d${sides} не поддерживается`)
+    if (count < 1 || count > MAX_DICE_PER_ROLL) {
+      throw new Error(`Можно бросать от 1 до ${MAX_DICE_PER_ROLL} кубиков за раз`)
+    }
     for (let i = 0; i < count; i++) rolls.push(rollDie(sides))
   }
   if (!found) throw new Error('Формат: 2d20+3')
@@ -45,4 +49,19 @@ export function formatRollChatMessage(playerName, expression, rolls, modifier, t
   const rollsPart = rolls.length ? `(${rolls.join(', ')})` : '—'
   const modSuffix = modifier !== 0 ? ` ${modifier > 0 ? '+ ' + modifier : '− ' + Math.abs(modifier)}` : ''
   return `${who} бросил ${displayExpr}. Выпало: ${rollsPart}${modSuffix}. Итог: ${total}`
+}
+
+export function extractAbilitySlotsFromText(text) {
+  const src = String(text ?? '')
+  const levels = []
+  const regex = /(?:ур(?:овень)?\.?\s*|lvl\s*|level\s*)([1-7])|([1-7])\s*(?:ур(?:овень)?\.?|lvl|level)/gi
+  let m
+  while ((m = regex.exec(src)) !== null) {
+    const value = Number(m[1] ?? m[2] ?? 0)
+    if (value >= 1 && value <= 7 && !levels.includes(value)) levels.push(value)
+  }
+  for (let i = 1; i <= 7; i++) {
+    if (!levels.includes(i) && new RegExp(`(^|\\D)${i}(\\D|$)`).test(src)) levels.push(i)
+  }
+  return levels.sort((a, b) => a - b)
 }

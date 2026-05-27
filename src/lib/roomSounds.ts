@@ -55,3 +55,11 @@ export function playAnnounceCue() {
   playTone(440, t, 0.14, 0.04, 'sine')
   playTone(554, t + 0.18, 0.1, 0.035, 'sine')
 }
+
+/** Короткий личный пинг от ГМа выбранному игроку */
+export function playPlayerSignalCue() {
+  resumeRoomAudio()
+  const t = getAudioContext()?.currentTime ?? 0
+  playTone(880, t, 0.08, 0.05, 'square')
+  playTone(1175, t + 0.1, 0.1, 0.04, 'square')
+}

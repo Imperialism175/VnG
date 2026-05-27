@@ -44,11 +44,11 @@ export function RoomMainLayout({ encounterBanner, children, roster, sideFeed }: 
     <div className="vng-room-layout flex flex-1 flex-col min-h-0">
       {encounterBanner}
       <div className="vng-room-layout__body flex flex-1 min-h-0 flex-col lg:flex-row">
-        <div className="vng-room-layout__roster order-1 lg:order-1">{roster}</div>
+        {roster ? <div className="vng-room-layout__roster order-1 lg:order-1">{roster}</div> : null}
         <div className="vng-room-layout__main flex-1 min-h-0 flex flex-col min-w-0 order-2 lg:order-2">
           {children}
         </div>
-        <div className="vng-room-layout__side order-3 lg:order-3">{sideFeed}</div>
+        {sideFeed ? <div className="vng-room-layout__side order-3 lg:order-3">{sideFeed}</div> : null}
       </div>
     </div>
   )

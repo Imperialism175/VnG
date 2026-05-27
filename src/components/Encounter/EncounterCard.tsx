@@ -10,9 +10,21 @@ interface EncounterCardProps {
   showDismiss?: boolean
   showGmNotes?: boolean
   compact?: boolean
+  showLiveControls?: boolean
+  onAdjustEnemyHp?: (enemyId: string, delta: number) => void
+  onOpenEditor?: () => void
 }
 
-export function EncounterCard({ encounter, onDismiss, showDismiss, showGmNotes, compact }: EncounterCardProps) {
+export function EncounterCard({
+  encounter,
+  onDismiss,
+  showDismiss,
+  showGmNotes,
+  compact,
+  showLiveControls,
+  onAdjustEnemyHp,
+  onOpenEditor,
+}: EncounterCardProps) {
   const moodLabel = encounter.mood ? MOOD_LABELS[encounter.mood] : null
 
   if (compact) {
@@ -141,11 +153,38 @@ export function EncounterCard({ encounter, onDismiss, showDismiss, showGmNotes, 
                       </span>
                     </div>
                     <SegmentedHpBar current={enemy.hp} max={enemy.hp_max} variant="enemy" />
+                    {showLiveControls && onAdjustEnemyHp && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <button type="button" className="vng-tui-btn text-xs" onClick={() => onAdjustEnemyHp(enemy.id, -5)}>
+                          -5 HP
+                        </button>
+                        <button type="button" className="vng-tui-btn text-xs" onClick={() => onAdjustEnemyHp(enemy.id, -1)}>
+                          -1 HP
+                        </button>
+                        <button type="button" className="vng-tui-btn text-xs" onClick={() => onAdjustEnemyHp(enemy.id, 1)}>
+                          +1 HP
+                        </button>
+                        <button type="button" className="vng-tui-btn text-xs" onClick={() => onAdjustEnemyHp(enemy.id, 5)}>
+                          +5 HP
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
                 {enemy.notes && <p className="text-xs text-vng-muted mt-1">{enemy.notes}</p>}
               </div>
             ))}
+          </div>
+        )}
+
+        {showLiveControls && (
+          <div className="p-2 rounded border border-dashed border-vng-border text-xs text-vng-muted flex flex-wrap items-center gap-2">
+            <span>Управление боем в реальном времени</span>
+            {onOpenEditor && (
+              <button type="button" className="vng-tui-btn text-xs ml-auto" onClick={onOpenEditor}>
+                Открыть редактор
+              </button>
+            )}
           </div>
         )}
 

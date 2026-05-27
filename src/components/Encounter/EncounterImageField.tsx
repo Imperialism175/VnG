@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Crop, ImagePlus, Link2, Trash2 } from 'lucide-react'
 import { EncounterImage } from '@/components/Encounter/EncounterImage'
 import { EncounterImageCropModal } from '@/components/Encounter/EncounterImageCropModal'
+import { normalizeEncounterImageUrl } from '@/lib/encounterImageUrl'
 import { readFileAsDataUrl } from '@/lib/imageCrop'
 import { Button, Input } from '@/components/ui/Button'
 
@@ -31,12 +32,12 @@ export function EncounterImageField({ value, onChange, previewAlt = 'Превь�
   function openCropFromUrl() {
     const url = urlDraft.trim()
     if (!url) return
-    setCropSrc(url)
+    setCropSrc(normalizeEncounterImageUrl(url))
   }
 
   function applyUrlWithoutCrop() {
     const url = urlDraft.trim()
-    onChange(url || null)
+    onChange(url ? normalizeEncounterImageUrl(url) : null)
   }
 
   return (
@@ -59,7 +60,7 @@ export function EncounterImageField({ value, onChange, previewAlt = 'Превь�
         </Button>
         {value && (
           <>
-            <Button type="button" size="sm" variant="secondary" onClick={() => setCropSrc(value)}>
+            <Button type="button" size="sm" variant="secondary" onClick={() => setCropSrc(normalizeEncounterImageUrl(value))}>
               <Crop size={14} /> Обрезать
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => onChange(null)}>
@@ -75,7 +76,7 @@ export function EncounterImageField({ value, onChange, previewAlt = 'Превь�
             label="Или ссылка (URL)"
             value={urlDraft}
             onChange={(e) => setUrlDraft(e.target.value)}
-            placeholder="https://…"
+            placeholder="https://… (включая Pinterest)"
           />
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">

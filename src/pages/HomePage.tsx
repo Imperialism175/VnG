@@ -7,11 +7,26 @@ import { getOrCreatePlayerId, saveSession } from '@/lib/utils'
 import { Button, Input } from '@/components/ui/Button'
 
 type Mode = 'choose' | 'create' | 'join'
+const ARCADE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('')
+
+function normalizeArcadeNick(input: string): string {
+  const upper = String(input ?? '').toUpperCase()
+  const filtered = [...upper].filter((ch) => ARCADE_ALPHABET.includes(ch)).slice(0, 3)
+  while (filtered.length < 3) filtered.push('A')
+  return filtered.join('')
+}
+
+function shiftArcadeChar(current: string, step: 1 | -1): string {
+  const idx = ARCADE_ALPHABET.indexOf(current)
+  const base = idx >= 0 ? idx : 0
+  const next = (base + step + ARCADE_ALPHABET.length) % ARCADE_ALPHABET.length
+  return ARCADE_ALPHABET[next]
+}
 
 export function HomePage() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('choose')
-  const [playerName, setPlayerName] = useState('')
+  const [playerName, setPlayerName] = useState('AAA')
   const [roomName, setRoomName] = useState('')
   const [serverHost, setServerHostState] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -59,14 +74,15 @@ export function HomePage() {
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
-    if (!playerName.trim() || !roomName.trim()) return
+    const nick = normalizeArcadeNick(playerName)
+    if (!nick || !roomName.trim()) return
     setLoading(true)
     setError(null)
     try {
       applyServerHost(serverHost)
       const playerId = getOrCreatePlayerId()
-      const { room } = await apiCreateRoom(roomName.trim(), playerId, playerName.trim())
-      saveSession({ playerId, name: playerName.trim(), roomId: room.id, isGm: true })
+      const { room } = await apiCreateRoom(roomName.trim(), playerId, nick)
+      saveSession({ playerId, name: nick, roomId: room.id, isGm: true })
       navigate(`/room/${room.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать комнату')
@@ -76,7 +92,8 @@ export function HomePage() {
   }
 
   async function handleJoinRoom(roomId: string) {
-    if (!playerName.trim()) {
+    const nick = normalizeArcadeNick(playerName)
+    if (!nick) {
       setError('Введите имя перед входом')
       return
     }
@@ -85,8 +102,8 @@ export function HomePage() {
     try {
       applyServerHost(serverHost)
       const playerId = getOrCreatePlayerId()
-      const { room, player } = await apiJoinRoom(roomId, playerId, playerName.trim())
-      saveSession({ playerId, name: playerName.trim(), roomId: room.id, isGm: player.is_gm })
+      const { room, player } = await apiJoinRoom(roomId, playerId, nick)
+      saveSession({ playerId, name: nick, roomId: room.id, isGm: player.is_gm })
       navigate(`/room/${room.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось войти в комнату')
@@ -96,15 +113,15 @@ export function HomePage() {
   }
 
   return (
-    <div className="vng-page min-h-full flex flex-col">
+    <div className="vng-page vng-home-page min-h-full flex flex-col">
       <header className="vng-dos-hud border-b border-vng-border">
-        <div className="max-w-lg mx-auto px-4 py-6 text-center uppercase">
-          <h1 className="text-2xl font-bold mb-2 tracking-widest">VNG TABLETOP RPG</h1>
-          <p className="text-vng-muted text-xs max-w-sm mx-auto">
+        <div className="vng-home-hero max-w-lg mx-auto px-4 py-6 text-center uppercase">
+          <h1 className="vng-home-hero__title text-2xl font-bold mb-2 tracking-widest">VNG TABLETOP RPG</h1>
+          <p className="vng-home-hero__subtitle text-vng-muted text-xs max-w-sm mx-auto">
             LAN / VPN — MS-DOS SESSION
           </p>
           <p
-            className={`mt-2 text-xs font-bold ${
+            className={`vng-home-hero__status mt-2 text-xs font-bold ${
               serverOnline ? 'vng-dos-hud__status--ok' : 'vng-dos-hud__status--err'
             }`}
           >
@@ -113,8 +130,8 @@ export function HomePage() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg w-full mx-auto px-4 py-6 flex flex-col gap-4">
-        <div className="vng-card p-4">
+      <main className="vng-home-main flex-1 max-w-lg w-full mx-auto px-4 py-6 flex flex-col gap-4">
+        <div className="vng-card vng-home-card p-4">
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium uppercase tracking-wide text-vng-muted flex items-center gap-1">
               <Server size={12} /> Адрес сервера хоста
@@ -125,11 +142,11 @@ export function HomePage() {
                 onChange={(e) => setServerHostState(e.target.value)}
                 onBlur={() => applyServerHost(serverHost)}
                 placeholder="127.0.0.1"
-                className="vng-tui-input w-full text-sm uppercase"
+                className="vng-tui-input vng-home-input w-full text-sm uppercase"
               />
             </div>
           </label>
-          <p className="text-xs sm:text-sm text-vng-muted mt-2 flex items-start gap-1">
+          <p className="vng-home-help text-xs sm:text-sm text-vng-muted mt-2 flex items-start gap-1">
             <Network size={12} className="shrink-0 mt-0.5" />
             Хост запускает <code className="text-vng-amber">start-vng.bat</code>. Игроки — тот же VPN/LAN IP.
           </p>
@@ -137,14 +154,14 @@ export function HomePage() {
 
         {mode === 'choose' && (
           <div className="flex flex-col gap-3">
-            <Button size="lg" className="w-full justify-start" onClick={() => setMode('create')}>
+            <Button size="lg" className="vng-home-action w-full justify-start" onClick={() => setMode('create')}>
               <Crown size={20} />
               <div className="text-left">
                 <div className="font-bold">Создать комнату</div>
                 <div className="text-xs opacity-80 font-normal">Я Гейм-мастер (хост)</div>
               </div>
             </Button>
-            <Button size="lg" variant="secondary" className="w-full justify-start" onClick={() => setMode('join')}>
+            <Button size="lg" variant="secondary" className="vng-home-action w-full justify-start" onClick={() => setMode('join')}>
               <DoorOpen size={20} />
               <div className="text-left">
                 <div className="font-bold">Войти в комнату</div>
@@ -155,11 +172,11 @@ export function HomePage() {
         )}
 
         {mode === 'create' && (
-          <form onSubmit={handleCreate} className="flex flex-col gap-4">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+          <form onSubmit={handleCreate} className="vng-home-form flex flex-col gap-4">
+            <h2 className="vng-home-section-title text-lg font-bold flex items-center gap-2">
               <Crown size={18} className="text-vng-amber" /> Новая сессия
             </h2>
-            <Input label="Ваше имя" value={playerName} onChange={(e) => setPlayerName(e.target.value)} required autoFocus />
+            <ArcadeNickPicker value={playerName} onChange={setPlayerName} />
             <Input label="Название сессии" value={roomName} onChange={(e) => setRoomName(e.target.value)} required />
             {error && <p className="text-sm text-vng-danger">{error}</p>}
             <div className="flex gap-2">
@@ -172,9 +189,9 @@ export function HomePage() {
         )}
 
         {mode === 'join' && (
-          <div className="flex flex-col gap-4">
+          <div className="vng-home-form flex flex-col gap-4">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-bold flex items-center gap-2">
+              <h2 className="vng-home-section-title text-lg font-bold flex items-center gap-2">
                 <DoorOpen size={18} className="text-vng-blue" /> Доступные комнаты
               </h2>
               <Button
@@ -189,13 +206,7 @@ export function HomePage() {
               </Button>
             </div>
 
-            <Input
-              label="Ваше имя"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              required
-              autoFocus
-            />
+            <ArcadeNickPicker value={playerName} onChange={setPlayerName} />
 
             {error && <p className="text-sm text-vng-danger">{error}</p>}
 
@@ -204,7 +215,7 @@ export function HomePage() {
                 <p className="text-sm text-vng-muted text-center py-8">Загрузка…</p>
               )}
               {!roomsLoading && rooms.length === 0 && (
-                <div className="vng-card p-6 text-center">
+                <div className="vng-card vng-home-card p-6 text-center">
                   <p className="text-sm text-vng-muted">Нет открытых комнат</p>
                   <p className="text-xs text-vng-muted/70 mt-1">Попросите ГМ создать сессию или обновите список</p>
                 </div>
@@ -215,7 +226,7 @@ export function HomePage() {
                   type="button"
                   disabled={!serverOnline || joiningId !== null}
                   onClick={() => handleJoinRoom(room.id)}
-                  className="vng-card w-full text-left p-4 hover:border-vng-blue/35 hover:vng-glow-blue transition-all disabled:opacity-50"
+                  className="vng-card vng-home-room-card w-full text-left p-4 hover:border-vng-blue/35 hover:vng-glow-blue transition-all disabled:opacity-50"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -240,6 +251,49 @@ export function HomePage() {
           </div>
         )}
       </main>
+    </div>
+  )
+}
+
+function ArcadeNickPicker({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const chars = normalizeArcadeNick(value).split('')
+  return (
+    <div className="vng-card vng-home-card p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-vng-muted mb-2">Ник игрока (3 символа)</p>
+      <div className="grid grid-cols-3 gap-2">
+        {chars.map((ch, idx) => (
+          <div key={idx} className="flex flex-col items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                const next = [...chars]
+                next[idx] = shiftArcadeChar(next[idx], 1)
+                onChange(next.join(''))
+              }}
+            >
+              ▲
+            </Button>
+            <div className="w-full text-center py-2 border border-vng-border bg-vng-bg font-bold text-lg vng-mono">
+              {ch}
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                const next = [...chars]
+                next[idx] = shiftArcadeChar(next[idx], -1)
+                onChange(next.join(''))
+              }}
+            >
+              ▼
+            </Button>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-vng-muted mt-2 uppercase">Итоговый ник: <span className="text-vng-amber">{chars.join('')}</span></p>
     </div>
   )
 }

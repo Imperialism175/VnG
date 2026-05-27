@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Maximize2, X } from 'lucide-react'
+import { normalizeEncounterImageUrl } from '@/lib/encounterImageUrl'
 
 export type EncounterImageSize = 'compact' | 'editor' | 'card'
 
@@ -12,6 +13,7 @@ interface EncounterImageProps {
 
 export function EncounterImage({ src, alt = '', size = 'card', className = '' }: EncounterImageProps) {
   const [open, setOpen] = useState(false)
+  const safeSrc = normalizeEncounterImageUrl(src)
 
   useEffect(() => {
     if (!open) return
@@ -31,7 +33,7 @@ export function EncounterImage({ src, alt = '', size = 'card', className = '' }:
         title="Открыть в полном размере"
         aria-label="Открыть картинку в полном размере"
       >
-        <img src={src} alt={alt} className="vng-encounter-img__img" loading="lazy" />
+        <img src={safeSrc} alt={alt} className="vng-encounter-img__img" loading="lazy" />
         <span className="vng-encounter-img__zoom" aria-hidden>
           <Maximize2 size={size === 'compact' ? 14 : 18} />
         </span>
@@ -54,7 +56,7 @@ export function EncounterImage({ src, alt = '', size = 'card', className = '' }:
             <X size={22} />
           </button>
           <img
-            src={src}
+            src={safeSrc}
             alt={alt}
             className="vng-image-lightbox__img"
             onClick={(e) => e.stopPropagation()}

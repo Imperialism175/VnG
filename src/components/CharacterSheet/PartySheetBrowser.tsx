@@ -27,12 +27,9 @@ export function PartySheetBrowser({
     () => buildViewableSheets(viewerPlayerId, viewerIsGm, players, characters, gmPlayerId),
     [viewerPlayerId, viewerIsGm, players, characters, gmPlayerId]
   )
-
   const [selectedId, setSelectedId] = useState<string>(() => viewerPlayerId)
-
   const activeId =
     selectedId && roster.some((e) => e.playerId === selectedId) ? selectedId : viewerPlayerId
-
   const active = roster.find((e) => e.playerId === activeId)
   const isOwn = activeId === viewerPlayerId
 
@@ -46,7 +43,7 @@ export function PartySheetBrowser({
 
   return (
     <div className="flex flex-col gap-3 h-full min-h-0">
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 shrink-0">
+      <div className="flex flex-wrap gap-2 pb-1 -mx-1 px-1 shrink-0 min-w-0">
         {roster.map((entry) => {
           const name = entry.character?.name?.trim() || entry.label
           const tabActive = entry.playerId === activeId
@@ -56,20 +53,13 @@ export function PartySheetBrowser({
               key={entry.playerId}
               type="button"
               onClick={() => setSelectedId(entry.playerId)}
-              title={
-                entry.visibility === 'restricted'
-                  ? `${name} — краткий лист`
-                  : entry.isNpc && entry.npcOpenMode === 'full'
-                    ? `${name} — открыт полностью`
-                    : name
-              }
-              className={`shrink-0 px-2.5 py-1.5 border text-xs font-medium flex items-center gap-1 ${
+              title={entry.visibility === 'restricted' ? `${name} — краткий лист` : name}
+              className={`px-2.5 py-1.5 border text-xs font-medium flex items-center gap-1 min-w-0 ${
                 tabActive
                   ? 'border-vng-blue bg-vng-blue/15 text-vng-blue'
                   : 'border-vng-border bg-vng-elevated text-vng-muted'
               }`}
             >
-              {entry.isNpc && <span className="opacity-70">◇</span>}
               {entry.visibility === 'restricted' ? (
                 <EyeOff size={12} className="shrink-0 opacity-80" />
               ) : (
@@ -80,7 +70,6 @@ export function PartySheetBrowser({
           )
         })}
       </div>
-
       <div className="flex-1 min-h-0 overflow-hidden">
         {active?.character ? (
           <CharacterSheet

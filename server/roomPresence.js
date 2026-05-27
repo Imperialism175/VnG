@@ -1,4 +1,4 @@
-export const DICE_ROLL_COOLDOWN_MS = 5000
+export const DICE_ROLL_COOLDOWN_MS = 2000
 
 export function initRoomPresence(room) {
   if (!room.handsRaised) room.handsRaised = new Set()

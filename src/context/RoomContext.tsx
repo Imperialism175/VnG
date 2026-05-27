@@ -26,12 +26,13 @@ import type {
 import { DICE_ROLL_COOLDOWN_MS } from '@/lib/diceCooldown'
 import type { DiceSides } from '@/types'
 import { syncLegacyHp } from '@/lib/encounterUtils'
-import { ensureSpecialTextFields } from '@/lib/characterSheets'
+import { createDefaultCounters, ensureAbilityLevelFields, ensureSpecialTextFields } from '@/lib/characterSheets'
 import { mergeTheme } from '@/lib/theme'
 import { parseRoomExtras, type RoomExtrasState } from '@/lib/roomExtras'
 import { applyPublicState, normalizeCharacter, normalizeEncounter } from '@/lib/normalize'
 import { RoomSocket } from '@/lib/wsClient'
 import { generateId, saveSession } from '@/lib/utils'
+import { playPlayerSignalCue } from '@/lib/roomSounds'
 
 interface Session {
   playerId: string
@@ -56,6 +57,9 @@ interface RoomContextValue {
   hallOfFame: HallOfFame
   stageFx: RoomStageFx
   allowPlayerThemeEditing: boolean
+  levelId: string | null
+  levelVariant: 'main' | 'alt'
+  showLevelToPlayers: boolean
   presence: RoomPresence
   canRollDice: boolean
   diceCooldownSec: number
@@ -64,7 +68,13 @@ interface RoomContextValue {
   connected: boolean
   error: string | null
   saveCharacter: (character: Character) => void
-  rollDice: (opts: { count: number; sides: DiceSides; modifier: number }) => void
+  rollDice: (opts: {
+    count: number
+    sides: DiceSides
+    scaleStatName?: string | null
+    scaleStatValue?: number | null
+    desiredAbilityLevel?: number | null
+  }) => void
   rerollInspired: (opts: { count: number; sides: DiceSides; modifier: number }) => void
   sendChat: (text: string) => void
   transferGm: (newGmId: string) => void
@@ -78,7 +88,7 @@ interface RoomContextValue {
   setPersonalTheme: (theme: RoomTheme) => void
   clearPersonalTheme: () => void
   setMusic: (url: string | null, playing: boolean) => void
-  startPoll: (question: string, options: string[]) => void
+  startPoll: (question: string, options: string[], durationSec?: number) => void
   castVote: (optionId: string) => void
   endPoll: () => void
   clearPoll: () => void
@@ -88,10 +98,12 @@ interface RoomContextValue {
   setStageFx: (darkness: number) => void
   setPlayerFlashlight: (playerId: string, enabled: boolean) => void
   setAllowPlayerThemeEditing: (enabled: boolean) => void
+  setLevelPreset: (levelId: string | null, variant: 'main' | 'alt') => void
+  setShowLevelToPlayers: (show: boolean) => void
   createNpcCharacter: (name: string) => void
   deleteNpcCharacter: (playerId: string) => void
   setHandRaised: (raised: boolean) => void
-  setDicePermission: (playerId: string, allowed: boolean) => void
+  pingPlayer: (playerId: string) => void
 }
 
 const RoomContext = createContext<RoomContextValue | null>(null)
@@ -107,20 +119,34 @@ export function createEmptyCharacter(roomId: string, playerId: string, playerNam
     class_status: '',
     description: '',
     text_fields: ensureSpecialTextFields([]),
+    special_field_locks: [],
+    stat_points_locked: false,
     stats: [
+      { id: generateId(), name: 'ХП', value: '0' },
       { id: generateId(), name: 'СИЛА', value: '0' },
       { id: generateId(), name: 'ЛОВКОСТЬ', value: '0' },
       { id: generateId(), name: 'ХАРИЗМА', value: '0' },
       { id: generateId(), name: 'ИНТЕЛЛЕКТ', value: '0' },
       { id: generateId(), name: 'УДАЧА', value: '0' },
     ],
-    counters: [{ id: generateId(), name: 'ХП', current: 10, max: 10 }],
+    counters: [
+      { id: generateId(), name: 'ХП', current: 0, max: 0 },
+      { id: generateId(), name: 'Очки вдохновения', current: 0, max: 99 },
+    ],
   }
 }
 
 function applyGmSession(roomId: string, playerId: string, playerName: string, isGm: boolean): Session {
   saveSession({ playerId, name: playerName, roomId, isGm })
   return { playerId, playerName, isGm }
+}
+
+function ensureInspirationCounter(counters: Character['counters'] | undefined) {
+  const source = Array.isArray(counters) ? counters : []
+  const hasInspiration = source.some((c) => /вдох|inspir/i.test(String(c.name ?? '')))
+  if (hasInspiration) return source
+  const fallback = createDefaultCounters().find((c) => /вдох|inspir/i.test(String(c.name ?? '')))
+  return fallback ? [...source, fallback] : source
 }
 
 function applyExtras(setters: {
@@ -132,6 +158,9 @@ function applyExtras(setters: {
   setHallOfFame: (h: HallOfFame) => void
   setStageFx: (s: RoomStageFx) => void
   setAllowPlayerThemeEditing: (enabled: boolean) => void
+  setLevelId: (levelId: string | null) => void
+  setLevelVariant: (variant: 'main' | 'alt') => void
+  setShowLevelToPlayers: (show: boolean) => void
 }, extras: RoomExtrasState) {
   setters.setRoomTheme(extras.roomTheme)
   setters.setPlayerThemes(extras.playerThemes)
@@ -141,6 +170,9 @@ function applyExtras(setters: {
   setters.setHallOfFame(extras.hallOfFame)
   setters.setStageFx(extras.stageFx)
   setters.setAllowPlayerThemeEditing(extras.allowPlayerThemeEditing)
+  setters.setLevelId(extras.levelId)
+  setters.setLevelVariant(extras.levelVariant)
+  setters.setShowLevelToPlayers(extras.showLevelToPlayers)
 }
 
 export function RoomProvider({
@@ -179,6 +211,9 @@ export function RoomProvider({
   const [allowPlayerThemeEditing, setAllowPlayerThemeEditingState] = useState<boolean>(
     () => parseRoomExtras({}).allowPlayerThemeEditing
   )
+  const [levelId, setLevelIdState] = useState<string | null>(() => parseRoomExtras({}).levelId)
+  const [levelVariant, setLevelVariantState] = useState<'main' | 'alt'>(() => parseRoomExtras({}).levelVariant)
+  const [showLevelToPlayers, setShowLevelToPlayersState] = useState<boolean>(() => parseRoomExtras({}).showLevelToPlayers)
   const [presence, setPresence] = useState<RoomPresence>({ handsRaised: [], diceAllowed: [] })
   const [diceCooldownUntil, setDiceCooldownUntil] = useState(0)
   const [cooldownTick, setCooldownTick] = useState(0)
@@ -198,6 +233,9 @@ export function RoomProvider({
       setHallOfFame: setHallOfFameState,
       setStageFx: setStageFxState,
       setAllowPlayerThemeEditing: setAllowPlayerThemeEditingState,
+      setLevelId: setLevelIdState,
+      setLevelVariant: setLevelVariantState,
+      setShowLevelToPlayers: setShowLevelToPlayersState,
     }),
     []
   )
@@ -224,7 +262,7 @@ export function RoomProvider({
 
       const myChar = state.characters.find((c) => c.player_id === playerId)
       if (myChar) setMyCharacter(myChar)
-      else if (me && !me.is_gm) setMyCharacter(createEmptyCharacter(state.room.id, playerId, me.name))
+      else if (me) setMyCharacter(createEmptyCharacter(state.room.id, playerId, me.name))
       else setMyCharacter(null)
     },
     [extrasSetters]
@@ -275,6 +313,11 @@ export function RoomProvider({
             handsRaised: msg.hands_raised ?? [],
             diceAllowed: msg.dice_allowed ?? [],
           })
+          break
+        case 'PLAYER_SIGNAL':
+          if (msg.target_player_id === initialSession.playerId && msg.from_player_id !== initialSession.playerId) {
+            playPlayerSignalCue()
+          }
           break
         case 'CHAT_MESSAGE':
           setChatMessages((prev) => [...prev, msg.message])
@@ -327,8 +370,7 @@ export function RoomProvider({
     return () => window.clearInterval(id)
   }, [diceCooldownUntil])
 
-  const canRollDice =
-    session.isGm || presence.diceAllowed.includes(initialSession.playerId)
+  const canRollDice = true
   const diceCooldownSec =
     diceCooldownUntil > Date.now() ? Math.ceil((diceCooldownUntil - Date.now()) / 1000) : 0
   void cooldownTick
@@ -342,7 +384,8 @@ export function RoomProvider({
     (character: Character) => {
       const normalizedCharacter: Character = {
         ...character,
-        text_fields: ensureSpecialTextFields(character.text_fields),
+        text_fields: ensureAbilityLevelFields(ensureSpecialTextFields(character.text_fields)),
+        counters: ensureInspirationCounter(character.counters),
       }
       if (character.player_id === initialSession.playerId) {
         setMyCharacter(normalizedCharacter)
@@ -361,8 +404,22 @@ export function RoomProvider({
     [initialSession.playerId]
   )
 
-  const rollDice = useCallback((opts: { count: number; sides: DiceSides; modifier: number }) => {
-    socketRef.current?.send({ type: 'DICE_ROLL', ...opts })
+  const rollDice = useCallback((opts: {
+    count: number
+    sides: DiceSides
+    scaleStatName?: string | null
+    scaleStatValue?: number | null
+    desiredAbilityLevel?: number | null
+  }) => {
+    socketRef.current?.send({
+      type: 'DICE_ROLL',
+      count: opts.count,
+      sides: opts.sides,
+      modifier: 0,
+      scale_stat_name: opts.scaleStatName ?? null,
+      scale_stat_value: opts.scaleStatValue ?? 0,
+      desired_ability_level: opts.desiredAbilityLevel ?? null,
+    })
   }, [])
 
   const rerollInspired = useCallback((opts: { count: number; sides: DiceSides; modifier: number }) => {
@@ -373,8 +430,8 @@ export function RoomProvider({
     socketRef.current?.send({ type: 'SET_HAND_RAISED', raised })
   }, [])
 
-  const setDicePermission = useCallback((playerId: string, allowed: boolean) => {
-    socketRef.current?.send({ type: 'SET_DICE_PERMISSION', player_id: playerId, allowed })
+  const pingPlayer = useCallback((playerId: string) => {
+    socketRef.current?.send({ type: 'PING_PLAYER', player_id: playerId })
   }, [])
 
   const sendChat = useCallback((text: string) => {
@@ -476,6 +533,27 @@ export function RoomProvider({
     socketRef.current?.send({ type: 'SET_ALLOW_PLAYER_THEME_EDITING', enabled: next })
   }, [])
 
+  const setLevelPreset = useCallback((nextLevelId: string | null, variant: 'main' | 'alt') => {
+    const normalizedId = nextLevelId && nextLevelId.trim() ? nextLevelId.trim() : null
+    const normalizedVariant: 'main' | 'alt' = variant === 'alt' ? 'alt' : 'main'
+    setLevelIdState(normalizedId)
+    setLevelVariantState(normalizedVariant)
+    socketRef.current?.send({
+      type: 'SET_LEVEL_PRESET',
+      level_id: normalizedId,
+      variant: normalizedVariant,
+    })
+  }, [])
+
+  const setShowLevelToPlayers = useCallback((show: boolean) => {
+    const next = Boolean(show)
+    setShowLevelToPlayersState(next)
+    socketRef.current?.send({
+      type: 'SET_LEVEL_VISIBILITY',
+      show_to_players: next,
+    })
+  }, [])
+
   const createNpcCharacter = useCallback((name: string) => {
     socketRef.current?.send({ type: 'CREATE_NPC_CHARACTER', name: name.trim() })
   }, [])
@@ -488,8 +566,14 @@ export function RoomProvider({
     socketRef.current?.send({ type: 'SET_MUSIC', url, playing })
   }, [])
 
-  const startPoll = useCallback((question: string, options: string[]) => {
-    socketRef.current?.send({ type: 'START_POLL', question, options })
+  const startPoll = useCallback((question: string, options: string[], durationSec?: number) => {
+    const duration = Number(durationSec)
+    socketRef.current?.send({
+      type: 'START_POLL',
+      question,
+      options,
+      duration_sec: Number.isFinite(duration) && duration > 0 ? Math.round(duration) : 0,
+    })
   }, [])
 
   const castVote = useCallback((optionId: string) => {
@@ -564,6 +648,9 @@ export function RoomProvider({
       hallOfFame,
       stageFx,
       allowPlayerThemeEditing,
+      levelId,
+      levelVariant,
+      showLevelToPlayers,
       presence,
       canRollDice,
       diceCooldownSec,
@@ -575,7 +662,7 @@ export function RoomProvider({
       rollDice,
       rerollInspired,
       setHandRaised,
-      setDicePermission,
+      pingPlayer,
       sendChat,
       transferGm,
       publishEncounter,
@@ -588,6 +675,8 @@ export function RoomProvider({
       setPersonalTheme,
       clearPersonalTheme,
       setAllowPlayerThemeEditing,
+      setLevelPreset,
+      setShowLevelToPlayers,
       setMusic: updateMusic,
       startPoll,
       castVote,
@@ -618,6 +707,9 @@ export function RoomProvider({
       hallOfFame,
       stageFx,
       allowPlayerThemeEditing,
+      levelId,
+      levelVariant,
+      showLevelToPlayers,
       presence,
       canRollDice,
       diceCooldownSec,
@@ -640,6 +732,8 @@ export function RoomProvider({
       setPersonalTheme,
       clearPersonalTheme,
       setAllowPlayerThemeEditing,
+      setLevelPreset,
+      setShowLevelToPlayers,
       updateMusic,
       startPoll,
       castVote,
@@ -653,7 +747,7 @@ export function RoomProvider({
       createNpcCharacter,
       deleteNpcCharacter,
       setHandRaised,
-      setDicePermission,
+      pingPlayer,
     ]
   )
 

@@ -7,6 +7,7 @@ interface RoomThemeApplierProps {
   stageFx?: RoomStageFx
   viewerPlayerId?: string
   viewerIsGm?: boolean
+  mobileUiScale?: number
   children: React.ReactNode
 }
 
@@ -15,6 +16,7 @@ export function RoomThemeApplier({
   stageFx,
   viewerPlayerId,
   viewerIsGm,
+  mobileUiScale = 1,
   children,
 }: RoomThemeApplierProps) {
   const ref = useRef<HTMLDivElement>(null)
@@ -38,6 +40,7 @@ export function RoomThemeApplier({
       className="vng-room-shell vng-retro-shell vng-page flex flex-col w-full max-lg:min-h-full lg:h-dvh lg:max-h-dvh lg:overflow-hidden"
       style={{
         ['--vng-stage-light' as string]: String(stageFx?.darkness ?? 100),
+        ['--vng-mobile-ui-scale' as string]: String(Math.max(0.8, Math.min(1.6, mobileUiScale))),
       }}
       onMouseMove={(e) => {
         if (!flashlightEnabled) return

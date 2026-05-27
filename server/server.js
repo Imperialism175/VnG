@@ -4,7 +4,8 @@ import { join, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer } from 'ws'
 import { randomUUID } from 'node:crypto'
-import { parseAndRoll, buildRollExpression, formatRollChatMessage } from './dice.js'
+import { parseAndRoll, buildRollExpression, formatRollChatMessage, extractAbilitySlotsFromText } from './dice.js'
+import { getLevelPalette } from './levels.js'
 import {
   DEFAULT_THEME,
   createRoomExtras,
@@ -19,6 +20,7 @@ import {
 import {
   detectMusicSource,
   fetchTitleViaYtDlp,
+  fetchPlaylistEntriesViaYtDlp,
   handleMusicStreamRequest,
   prepareRoomMusicStream,
   stopRoomMusic,
@@ -37,6 +39,7 @@ import { rooms, SERVER_PORT, MAX_ROLLS, MAX_CHAT, getLanAddresses } from './stat
 const HOST = process.env.HOST || '0.0.0.0'
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const DIST_DIR = join(__dirname, '..', 'dist')
+const pollAutoCloseTimers = new Map()
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -50,13 +53,9 @@ const MIME = {
 
 const SPECIAL_FIELD_NAMES = [
   'Способности',
-  'Инвентарь',
   'Бэкграунд',
-  'Особое',
   'Заметки ГМ',
   'Правило листика',
-  'Очки на характеристики',
-  'Хранилище приемов',
 ]
 
 function ensureSpecialTextFields(textFields) {
@@ -68,6 +67,20 @@ function ensureSpecialTextFields(textFields) {
     return found
       ? { ...found, name }
       : { id: randomUUID(), name, value: '' }
+  })
+}
+
+function ensureAbilityLevelsText(textFields) {
+  const fields = ensureSpecialTextFields(textFields)
+  return fields.map((field) => {
+    if (String(field?.name ?? '').trim().toLowerCase() !== 'способности') return field
+    const src = String(field?.value ?? '').trim()
+    if (/ур(?:овень)?\s*1/i.test(src) || /\blvl\s*1\b/i.test(src)) return field
+    const prefix = src ? `${src}\n\n` : ''
+    return {
+      ...field,
+      value: `${prefix}Уровень 1: \nУровень 2: \nУровень 3: \nУровень 4: \nУровень 5: \nУровень 6: \nУровень 7: `,
+    }
   })
 }
 
@@ -104,6 +117,33 @@ function send(ws, payload) {
   if (ws.readyState === 1) ws.send(JSON.stringify(payload))
 }
 
+function clearPollAutoClose(roomId) {
+  const timer = pollAutoCloseTimers.get(roomId)
+  if (timer) {
+    clearTimeout(timer)
+    pollAutoCloseTimers.delete(roomId)
+  }
+}
+
+function schedulePollAutoClose(room) {
+  clearPollAutoClose(room.id)
+  const endsAt = room.activePoll?.ends_at
+  if (!room.activePoll?.open || !endsAt) return
+  const delay = new Date(endsAt).getTime() - Date.now()
+  if (!Number.isFinite(delay) || delay <= 0) {
+    room.activePoll.open = false
+    return
+  }
+  const pollId = room.activePoll.id
+  const timer = setTimeout(() => {
+    pollAutoCloseTimers.delete(room.id)
+    if (!room.activePoll || room.activePoll.id !== pollId || !room.activePoll.open) return
+    room.activePoll.open = false
+    broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
+  }, delay)
+  pollAutoCloseTimers.set(room.id, timer)
+}
+
 function createEmptyCharacter(roomId, playerId, playerName, opts = {}) {
   return {
     id: randomUUID(),
@@ -114,15 +154,21 @@ function createEmptyCharacter(roomId, playerId, playerName, opts = {}) {
     sheet_preset_id: null,
     class_status: '',
     description: '',
-    text_fields: ensureSpecialTextFields([]),
+    text_fields: ensureAbilityLevelsText([]),
+    special_field_locks: [],
+    stat_points_locked: false,
     stats: [
+      { id: randomUUID(), name: 'ХП', value: '0' },
       { id: randomUUID(), name: 'СИЛА', value: '0' },
       { id: randomUUID(), name: 'ЛОВКОСТЬ', value: '0' },
       { id: randomUUID(), name: 'ХАРИЗМА', value: '0' },
       { id: randomUUID(), name: 'ИНТЕЛЛЕКТ', value: '0' },
       { id: randomUUID(), name: 'УДАЧА', value: '0' },
     ],
-    counters: [{ id: randomUUID(), name: 'ХП', current: 10, max: 10 }],
+    counters: [
+      { id: randomUUID(), name: 'ХП', current: 0, max: 0 },
+      { id: randomUUID(), name: 'Очки вдохновения', current: 0, max: 99 },
+    ],
     is_npc: Boolean(opts.isNpc),
     in_party: Boolean(opts.isNpc && opts.inParty),
     npc_visibility: Boolean(opts.isNpc && opts.inParty) ? 'full' : 'restricted',
@@ -149,6 +195,133 @@ function trimChat(room) {
 function findInspirationCounter(char) {
   if (!char?.counters?.length) return -1
   return char.counters.findIndex((c) => /вдох|inspir/i.test(String(c.name ?? '')))
+}
+
+function parseFiniteStatValue(raw) {
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+}
+
+function ensureInspirationCounter(counters) {
+  const source = Array.isArray(counters) ? counters : []
+  const has = source.some((c) => /вдох|inspir/i.test(String(c?.name ?? '')))
+  if (has) return source
+  return [...source, { id: randomUUID(), name: 'Очки вдохновения', current: 0, max: 99 }]
+}
+
+function sanitizeSpecialFieldLocks(rawLocks, textFields) {
+  const allowed = new Set((Array.isArray(textFields) ? textFields : []).map((f) => String(f?.id ?? '')))
+  if (!Array.isArray(rawLocks)) return []
+  const unique = []
+  for (const entry of rawLocks) {
+    const id = String(entry ?? '')
+    if (!id || !allowed.has(id) || unique.includes(id)) continue
+    unique.push(id)
+  }
+  return unique
+}
+
+function isSkillPointCounterName(name) {
+  return /очк.*харак|skill.*point/i.test(String(name ?? ''))
+}
+
+const ARCADE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+
+function normalizeArcadeName(input) {
+  const src = String(input ?? '').toUpperCase()
+  const chars = [...src].filter((ch) => ARCADE_ALPHABET.includes(ch)).slice(0, 3)
+  while (chars.length < 3) chars.push('A')
+  return chars.join('')
+}
+
+function extractMetaImageUrl(html, baseUrl) {
+  const src = String(html ?? '')
+  const patterns = [
+    /<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+    /<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+  ]
+  for (const re of patterns) {
+    const m = src.match(re)
+    if (!m?.[1]) continue
+    try {
+      return new URL(m[1], baseUrl).toString()
+    } catch {
+      return m[1]
+    }
+  }
+  return null
+}
+
+async function fetchImageForProxy(url, depth = 0) {
+  if (depth > 2) throw new Error('Слишком много переадресаций страницы')
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (VnG image proxy)',
+      Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+    },
+    redirect: 'follow',
+  })
+  if (!response.ok) throw new Error(`Источник вернул ${response.status}`)
+
+  const contentType = String(response.headers.get('content-type') ?? '').toLowerCase()
+  if (contentType.startsWith('image/')) {
+    const bytes = await response.arrayBuffer()
+    const buffer = Buffer.from(bytes)
+    if (buffer.length > 12 * 1024 * 1024) throw new Error('Картинка слишком большая (макс 12MB)')
+    return { contentType, buffer }
+  }
+
+  if (contentType.includes('text/html')) {
+    const html = await response.text()
+    const imageUrl = extractMetaImageUrl(html, response.url || url)
+    if (imageUrl) return fetchImageForProxy(imageUrl, depth + 1)
+  }
+
+  throw new Error('Ссылка не содержит изображение')
+}
+
+function applyPlayerLocks(existing, incoming) {
+  const prev = existing ?? {}
+  const lockIds = new Set(Array.isArray(prev.special_field_locks) ? prev.special_field_locks : [])
+  const prevFieldsById = new Map((Array.isArray(prev.text_fields) ? prev.text_fields : []).map((f) => [String(f.id), f]))
+  const incomingFields = Array.isArray(incoming.text_fields) ? incoming.text_fields : []
+  const textFields = incomingFields.map((f) => {
+    const fid = String(f?.id ?? '')
+    if (!fid || !lockIds.has(fid)) return f
+    const prevField = prevFieldsById.get(fid)
+    return prevField ? { ...prevField } : f
+  })
+  const presentIds = new Set(textFields.map((f) => String(f?.id ?? '')))
+  for (const lockId of lockIds) {
+    if (presentIds.has(lockId)) continue
+    const prevField = prevFieldsById.get(lockId)
+    if (prevField) textFields.push({ ...prevField })
+  }
+  if (!prev.stat_points_locked) {
+    return {
+      text_fields: textFields,
+      stats: incoming.stats,
+      counters: incoming.counters,
+    }
+  }
+  const prevStats = Array.isArray(prev.stats) ? prev.stats : []
+  const prevCounters = Array.isArray(prev.counters) ? prev.counters : []
+  const incomingCounters = Array.isArray(incoming.counters) ? incoming.counters : []
+  const skillCounterIds = new Set(
+    prevCounters.filter((c) => isSkillPointCounterName(c?.name)).map((c) => String(c.id))
+  )
+  const prevCountersById = new Map(prevCounters.map((c) => [String(c.id), c]))
+  const counters = incomingCounters.map((c) => {
+    const cid = String(c?.id ?? '')
+    if (!skillCounterIds.has(cid)) return c
+    const prevCounter = prevCountersById.get(cid)
+    return prevCounter ? { ...prevCounter } : c
+  })
+  return {
+    text_fields: textFields,
+    stats: prevStats,
+    counters,
+  }
 }
 
 function serveStatic(req, res) {
@@ -189,8 +362,38 @@ const httpServer = createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === 'GET' && url.pathname === '/api/image-proxy') {
+      const target = String(url.searchParams.get('url') ?? '').trim()
+      if (!/^https?:\/\//i.test(target)) {
+        json(400, { error: 'Нужна корректная http/https ссылка' })
+        return
+      }
+      const proxied = await fetchImageForProxy(target)
+      res.writeHead(200, {
+        'Content-Type': proxied.contentType || 'image/jpeg',
+        'Cache-Control': 'public, max-age=3600',
+      })
+      res.end(proxied.buffer)
+      return
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/server/info') {
       json(200, { port: SERVER_PORT, addresses: getLanAddresses(), music: getYtDlpStatus() })
+      return
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/music/playlist') {
+      const playlistUrl = String(url.searchParams.get('url') ?? '').trim()
+      if (!playlistUrl) {
+        json(400, { error: 'Нужна ссылка на плейлист' })
+        return
+      }
+      const result = await fetchPlaylistEntriesViaYtDlp(playlistUrl)
+      if (result.error) {
+        json(400, { error: result.error, entries: [] })
+        return
+      }
+      json(200, { entries: result.entries })
       return
     }
 
@@ -228,6 +431,7 @@ const httpServer = createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/rooms') {
       const { name, playerId, playerName } = body
+      const normalizedName = normalizeArcadeName(playerName)
       const id = randomUUID()
       const room = {
         id,
@@ -235,7 +439,7 @@ const httpServer = createServer(async (req, res) => {
         createdAt: Date.now(),
         hostId: playerId,
         gmId: playerId,
-        players: new Map([[playerId, { id: playerId, room_id: id, name: playerName.trim(), is_gm: true }]]),
+        players: new Map([[playerId, { id: playerId, room_id: id, name: normalizedName, is_gm: true }]]),
         characters: new Map(),
         rollEvents: [],
         chatMessages: [],
@@ -252,17 +456,18 @@ const httpServer = createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/rooms/join') {
       const room = rooms.get(body.roomId)
       if (!room) return json(404, { error: 'Комната не найдена' })
+      const normalizedName = normalizeArcadeName(body.playerName)
       if (!room.players.has(body.playerId)) {
         room.players.set(body.playerId, {
           id: body.playerId,
           room_id: room.id,
-          name: body.playerName.trim(),
+          name: normalizedName,
           is_gm: false,
         })
-        room.characters.set(body.playerId, createEmptyCharacter(room.id, body.playerId, body.playerName.trim()))
+        room.characters.set(body.playerId, createEmptyCharacter(room.id, body.playerId, normalizedName))
       } else {
         const p = room.players.get(body.playerId)
-        p.name = body.playerName.trim()
+        p.name = normalizedName
       }
       broadcastState(room)
       json(200, {
@@ -349,10 +554,22 @@ wss.on('connection', (ws, req) => {
         player.is_gm || targetId !== playerId
           ? base.counters
           : applyPlayerCounterPolicy(existing, base)
+      const playerLockedPayload =
+        !player.is_gm && targetId === playerId
+          ? applyPlayerLocks(existing, { ...base, counters })
+          : { text_fields: base.text_fields, stats: base.stats, counters }
+      const resolvedTextFields = ensureAbilityLevelsText(playerLockedPayload.text_fields)
       const updated = {
         ...base,
-        text_fields: ensureSpecialTextFields(base.text_fields),
-        counters,
+        text_fields: resolvedTextFields,
+        special_field_locks: player.is_gm
+          ? sanitizeSpecialFieldLocks(char.special_field_locks ?? base.special_field_locks, resolvedTextFields)
+          : (Array.isArray(existing?.special_field_locks) ? existing.special_field_locks : []),
+        stat_points_locked: player.is_gm
+          ? Boolean(char.stat_points_locked ?? base.stat_points_locked)
+          : Boolean(existing?.stat_points_locked),
+        stats: playerLockedPayload.stats,
+        counters: ensureInspirationCounter(playerLockedPayload.counters),
         is_npc: existing?.is_npc ?? base.is_npc ?? isNpcCharacter({ player_id: targetId }),
         npc_visibility:
           player.is_gm &&
@@ -414,15 +631,22 @@ wss.on('connection', (ws, req) => {
       broadcastPresence(room, broadcast)
     }
 
+    if (msg.type === 'PING_PLAYER' && player.is_gm) {
+      const targetId = String(msg.player_id ?? '')
+      if (!targetId || targetId === playerId) return
+      const target = room.players.get(targetId)
+      if (!target || target.is_gm) return
+      broadcast(room, {
+        type: 'PLAYER_SIGNAL',
+        target_player_id: targetId,
+        from_player_id: playerId,
+        from_name: player.name,
+      })
+    }
+
     if (msg.type === 'DICE_ROLL') {
       initRoomPresence(room)
       const now = Date.now()
-      if (!player.is_gm) {
-        if (!room.diceAllowed.has(playerId)) {
-          send(ws, { type: 'ERROR', message: 'ГМ не разрешил вам бросать кубы' })
-          return
-        }
-      }
       const lastAt = room.lastDiceRollAt.get(playerId) ?? 0
       if (now - lastAt < DICE_ROLL_COOLDOWN_MS) {
         const wait = Math.ceil((DICE_ROLL_COOLDOWN_MS - (now - lastAt)) / 1000)
@@ -432,30 +656,61 @@ wss.on('connection', (ws, req) => {
 
       const expr = msg.expression ?? buildRollExpression(msg.count ?? 1, msg.sides ?? 20, msg.modifier ?? 0)
       try {
+        const char = room.characters.get(playerId)
         const r = parseAndRoll(expr)
+        const scaleStatName = String(msg.scale_stat_name ?? '').trim()
+        const requestedScaleValue = Number(msg.scale_stat_value)
+        const scaleStatRaw = scaleStatName
+          ? char?.stats?.find((s) => String(s?.name ?? '').trim().toLowerCase() === scaleStatName.toLowerCase())?.value
+          : null
+        const scaleStatValue = parseFiniteStatValue(scaleStatRaw)
+        const scaledModifier = Number.isFinite(requestedScaleValue) ? requestedScaleValue : (scaleStatValue ?? 0)
+        const scaledTotal = r.total + scaledModifier
+
+        let abilityLevel = null
+        let abilityUsable = null
+        const abilitiesText = char?.text_fields?.find((f) => String(f?.name ?? '').trim().toLowerCase() === 'способности')?.value ?? ''
+        const availableLevels = extractAbilitySlotsFromText(abilitiesText)
+        const absRollTotal = Math.abs(r.total)
+        const desiredAbilityLevelRaw = Number(msg.desired_ability_level)
+        const desiredAbilityLevel =
+          Number.isFinite(desiredAbilityLevelRaw) && desiredAbilityLevelRaw >= 1 && desiredAbilityLevelRaw <= 7
+            ? Math.round(desiredAbilityLevelRaw)
+            : null
+        if ((msg.sides ?? 20) === 20 && absRollTotal > 0 && availableLevels.length > 0 && desiredAbilityLevel !== null) {
+          abilityLevel = desiredAbilityLevel
+          abilityUsable = availableLevels.includes(desiredAbilityLevel) && absRollTotal % desiredAbilityLevel === 0
+        }
+
+        let message = formatRollChatMessage(player.name, r.expression, r.rolls, scaledModifier, scaledTotal, player.is_gm)
+        if (scaleStatName) {
+          message += ` | стат: ${scaleStatName}`
+        }
+        if (abilityLevel !== null) {
+          message += ` | способность ур.${abilityLevel}: ${abilityUsable ? 'МОЖНО ИСПОЛЬЗОВАТЬ' : 'НЕЛЬЗЯ'}`
+        }
         const event = {
           id: randomUUID(),
           room_id: room.id,
           player_id: playerId,
           player_name: player.name,
           expression: r.expression,
-          total: r.total,
-          details: `[${r.rolls.join(', ')}] = ${r.total}`,
+          total: scaledTotal,
+          details: `[${r.rolls.join(', ')}] = ${scaledTotal}${scaleStatName ? ` | stat ${scaleStatName}: ${scaledModifier >= 0 ? '+' : ''}${scaledModifier}` : ''}${abilityLevel !== null ? ` | ability lvl ${abilityLevel}: ${abilityUsable ? 'ok' : 'fail'}` : ''}`,
           rolls: r.rolls,
-          modifier: r.modifier,
+          modifier: scaledModifier,
           sides: msg.sides ?? null,
+          scale_stat_name: scaleStatName || null,
+          scale_stat_value: scaledModifier,
+          ability_level: abilityLevel,
+          ability_usable: abilityUsable,
           player_is_gm: Boolean(player.is_gm),
-          message: formatRollChatMessage(player.name, r.expression, r.rolls, r.modifier, r.total, player.is_gm),
+          message,
           created_at: new Date().toISOString(),
         }
         room.rollEvents.push(event)
         room.lastDiceRollAt.set(playerId, now)
         trimRolls(room)
-        // Разовое разрешение: после удачного броска снимаем флаг для игрока
-        if (!player.is_gm) {
-          room.diceAllowed.delete(playerId)
-          broadcastPresence(room, broadcast)
-        }
         broadcast(room, { type: 'DICE_ROLL', event })
       } catch (e) {
         send(ws, { type: 'ERROR', message: e.message })
@@ -515,6 +770,7 @@ wss.on('connection', (ws, req) => {
           sides: msg.sides ?? null,
           player_is_gm: Boolean(player.is_gm),
           message: `${formatRollChatMessage(player.name, r.expression, r.rolls, r.modifier, r.total, player.is_gm)} (переброс за вдохновение)`,
+          reroll_inspiration: true,
           created_at: new Date().toISOString(),
         }
         room.rollEvents.push(event)
@@ -619,6 +875,26 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
+    if (msg.type === 'SET_LEVEL_PRESET' && player.is_gm) {
+      const nextLevelId = typeof msg.level_id === 'string' && msg.level_id.trim() ? msg.level_id.trim() : null
+      const variant = msg.variant === 'alt' ? 'alt' : 'main'
+      room.levelId = nextLevelId
+      room.levelVariant = variant
+      if (nextLevelId) {
+        const palette = getLevelPalette(nextLevelId, variant)
+        if (palette) {
+          room.theme = sanitizeTheme(palette)
+          room.playerThemes = {}
+        }
+      }
+      broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
+    }
+
+    if (msg.type === 'SET_LEVEL_VISIBILITY' && player.is_gm) {
+      room.showLevelToPlayers = Boolean(msg.show_to_players)
+      broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
+    }
+
     if (msg.type === 'CLEAR_PLAYER_THEME' && player.is_gm) {
       const target = msg.target_player_id
       if (target) delete room.playerThemes[target]
@@ -718,11 +994,12 @@ wss.on('connection', (ws, req) => {
     }
 
     if (msg.type === 'START_POLL' && player.is_gm) {
-      const poll = startPoll(room, msg.question, msg.options ?? [])
+      const poll = startPoll(room, msg.question, msg.options ?? [], msg.duration_sec)
       if (!poll) {
         send(ws, { type: 'ERROR', message: 'Нужен вопрос и минимум 2 варианта' })
         return
       }
+      schedulePollAutoClose(room)
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
@@ -735,11 +1012,13 @@ wss.on('connection', (ws, req) => {
 
     if (msg.type === 'END_POLL' && player.is_gm && room.activePoll) {
       room.activePoll.open = false
+      clearPollAutoClose(room.id)
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
     if (msg.type === 'CLEAR_POLL' && player.is_gm) {
       room.activePoll = null
+      clearPollAutoClose(room.id)
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
@@ -785,6 +1064,7 @@ wss.on('connection', (ws, req) => {
     broadcastPresence(room, broadcast)
     if (room.clients.size === 0) {
       stopRoomMusic(room.id)
+      clearPollAutoClose(room.id)
       rooms.delete(room.id)
     }
   })

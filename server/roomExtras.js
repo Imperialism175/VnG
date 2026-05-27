@@ -16,6 +16,9 @@ export function createRoomExtras() {
     hallOfFame: { title: 'ЗАЛ СЛАВЫ', entries: [] },
     stageFx: { darkness: 100, flashlightsEnabledFor: [] },
     allowPlayerThemeEditing: true,
+    levelId: null,
+    levelVariant: 'main',
+    showLevelToPlayers: false,
   }
 }
 
@@ -96,6 +99,9 @@ export function serializeRoomExtras(room) {
     room.hallOfFame = extras.hallOfFame
     room.stageFx = extras.stageFx
     room.allowPlayerThemeEditing = extras.allowPlayerThemeEditing
+    room.levelId = extras.levelId
+    room.levelVariant = extras.levelVariant
+    room.showLevelToPlayers = extras.showLevelToPlayers
   }
   if (!room.hallOfFame) {
     room.hallOfFame = { title: 'ЗАЛ СЛАВЫ', entries: [] }
@@ -109,6 +115,15 @@ export function serializeRoomExtras(room) {
   if (typeof room.allowPlayerThemeEditing !== 'boolean') {
     room.allowPlayerThemeEditing = true
   }
+  if (typeof room.levelId !== 'string' || !room.levelId.trim()) {
+    room.levelId = null
+  }
+  if (room.levelVariant !== 'alt') {
+    room.levelVariant = 'main'
+  }
+  if (typeof room.showLevelToPlayers !== 'boolean') {
+    room.showLevelToPlayers = false
+  }
   return {
     room_theme: room.theme,
     player_themes: room.playerThemes,
@@ -118,16 +133,22 @@ export function serializeRoomExtras(room) {
     hall_of_fame: room.hallOfFame,
     stage_fx: room.stageFx,
     allow_player_theme_editing: room.allowPlayerThemeEditing,
+    level_id: room.levelId,
+    level_variant: room.levelVariant,
+    show_level_to_players: room.showLevelToPlayers,
   }
 }
 
-export function startPoll(room, question, optionTexts) {
+export function startPoll(room, question, optionTexts, durationSec = 0) {
   const options = optionTexts
     .map((t) => String(t).trim())
     .filter(Boolean)
     .slice(0, 8)
     .map((text) => ({ id: randomUUID(), text }))
   if (!question?.trim() || options.length < 2) return null
+  const timer = Number(durationSec)
+  const safeDuration = Number.isFinite(timer) && timer > 0 ? Math.max(10, Math.min(7200, Math.round(timer))) : null
+  const endsAt = safeDuration ? new Date(Date.now() + safeDuration * 1000).toISOString() : null
   room.activePoll = {
     id: randomUUID(),
     question: question.trim().slice(0, 200),
@@ -135,6 +156,8 @@ export function startPoll(room, question, optionTexts) {
     votes: {},
     open: true,
     created_at: new Date().toISOString(),
+    duration_sec: safeDuration,
+    ends_at: endsAt,
   }
   return room.activePoll
 }

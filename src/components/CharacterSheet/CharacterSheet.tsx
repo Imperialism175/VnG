@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Minus, Plus, Scroll, Trash2, PlusCircle } from 'lucide-react'
+import { Lock, Scroll, Trash2, Unlock, PlusCircle } from 'lucide-react'
 import type { Character, CounterField, StatField, TextField } from '@/types'
 import { generateId } from '@/lib/utils'
 import { StatIcon } from '@/lib/statIcons'
 import { Panel } from '@/components/ui/Panel'
 import { SegmentedHpBar } from '@/components/ui/SegmentedHpBar'
-import { Button, Input, Textarea } from '@/components/ui/Button'
+import { Button, Input } from '@/components/ui/Button'
 import {
   applySheetPreset,
   computeMaxHpBySpentPoints,
-  inferSpentPointsFromMaxHp,
   getStatEffectForCharacterSheet,
+  getThresholdEffectsForCharacter,
   isSkillPointCounter,
+  isResearcherSheet,
+  resolveCharacterPresetId,
   SHEET_PRESETS,
   type StatEffectValue,
   type SheetPresetId,
@@ -24,7 +26,7 @@ interface CharacterSheetProps {
   gmEditing?: boolean
   /** Игрок не может менять HP/счётчики здоровья (только ГМ) */
   lockHp?: boolean
-  /** Краткий просмотр — скрыты описание, статы и особые поля */
+  /** Краткий просмотр — скрыты статы и особые поля */
   restrictedView?: boolean
 }
 
@@ -32,7 +34,64 @@ function isHealthCounter(name: string) {
   return /здор|хп|hp/i.test(name)
 }
 
-const HP_BASE_VALUE = 10
+function isInspirationCounter(name: string) {
+  return /вдох|inspir/i.test(name)
+}
+
+function isHpStat(name: string) {
+  return String(name ?? '').trim().toLowerCase() === 'хп'
+}
+
+const HP_BASE_VALUE = 0
+
+function isAbilitiesField(name: string): boolean {
+  return name.trim().toLowerCase() === 'способности'
+}
+
+function parseAbilityLevels(value: string): Record<number, string> {
+  const result: Record<number, string> = { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '' }
+  const src = String(value ?? '')
+  const headerRe = /(?:^|\n)[ \t]*(?:ур(?:овень)?\.?[ \t]*)([1-7])[ \t]*:[ \t]*/gi
+  const matches: Array<{ level: number; start: number; contentStart: number }> = []
+  let m: RegExpExecArray | null = null
+  while ((m = headerRe.exec(src)) !== null) {
+    const level = Number(m[1])
+    if (level < 1 || level > 7) continue
+    matches.push({ level, start: m.index, contentStart: headerRe.lastIndex })
+  }
+
+  if (matches.length === 0) {
+    const lines = src.split(/\r?\n/)
+    for (const raw of lines) {
+      const line = raw.trim()
+      if (!line) continue
+      const legacy = line.match(/^(?:ур(?:овень)?\.?\s*)([1-7])\s*:\s*(.*)$/i)
+      if (!legacy) continue
+      const level = Number(legacy[1])
+      if (level >= 1 && level <= 7) result[level] = legacy[2] ?? ''
+    }
+    return result
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i]
+    const next = matches[i + 1]
+    const end = next ? next.start : src.length
+    let chunk = src.slice(current.contentStart, end)
+    if (chunk.startsWith('\n')) chunk = chunk.slice(1)
+    if (chunk.endsWith('\n')) chunk = chunk.slice(0, -1)
+    result[current.level] = chunk
+  }
+  return result
+}
+
+function buildAbilityLevelsText(levels: Record<number, string>): string {
+  const rows: string[] = []
+  for (let i = 1; i <= 7; i++) {
+    rows.push(`Уровень ${i}:\n${String(levels[i] ?? '')}`)
+  }
+  return rows.join('\n\n')
+}
 
 export function CharacterSheet({
   character,
@@ -46,7 +105,11 @@ export function CharacterSheet({
   /** Игроки никогда не редактируют HP; ГМ — только без lockHp */
   const healthLocked = !gmEditing || Boolean(lockHp)
   const [local, setLocal] = useState(character)
+  const [showThresholdTable, setShowThresholdTable] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const researcherMode = isResearcherSheet(local.sheet_preset_id ?? null, local.class_status)
+  const specialFieldLocks = new Set(local.special_field_locks ?? [])
+  const statPointsLocked = Boolean(local.stat_points_locked)
 
   useEffect(() => {
     setLocal(character)
@@ -66,14 +129,53 @@ export function CharacterSheet({
   }
 
   function addStat() {
+    if (statPointsLocked && !gmEditing) return
     const stat: StatField = { id: generateId(), name: 'Параметр', value: '0' }
     scheduleSave({ ...local, stats: [...local.stats, stat] })
   }
 
   function updateStat(id: string, patch: Partial<StatField>) {
+    if (statPointsLocked && !gmEditing) return
+    const nextStats = local.stats.map((s) => (s.id === id ? { ...s, ...patch } : s))
+    const updatedStat = nextStats.find((s) => s.id === id)
+    if (!updatedStat || !isHpStat(updatedStat.name) || patch.value === undefined) {
+      scheduleSave({
+        ...local,
+        stats: nextStats,
+      })
+      return
+    }
+    const hpSpent = Number(updatedStat.value)
+    if (!Number.isFinite(hpSpent)) {
+      scheduleSave({
+        ...local,
+        stats: nextStats,
+      })
+      return
+    }
+    const normalizedSpent = Math.max(0, Math.round(hpSpent))
+    const hpMax = computeMaxHpBySpentPoints(
+      normalizedSpent,
+      local.sheet_preset_id ?? null,
+      local.class_status,
+      HP_BASE_VALUE
+    )
+    const hpIdx = local.counters.findIndex((c) => isHealthCounter(c.name))
+    if (hpIdx < 0) {
+      scheduleSave({
+        ...local,
+        stats: nextStats.map((s) => (s.id === id ? { ...s, value: String(normalizedSpent) } : s)),
+      })
+      return
+    }
     scheduleSave({
       ...local,
-      stats: local.stats.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      stats: nextStats.map((s) => (s.id === id ? { ...s, value: String(normalizedSpent) } : s)),
+      counters: local.counters.map((c, i) =>
+        i === hpIdx
+          ? { ...c, max: hpMax, current: Math.min(c.current, hpMax) }
+          : c
+      ),
     })
   }
 
@@ -87,18 +189,27 @@ export function CharacterSheet({
   }
 
   function updateCounter(id: string, patch: Partial<CounterField>) {
-    scheduleSave({
-      ...local,
-      counters: local.counters.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    const nextCounters = local.counters.map((c) => {
+      if (c.id !== id) return c
+      const rawCurrent = patch.current ?? c.current
+      const rawMax = patch.max ?? c.max
+      const safeMax = Math.max(1, Math.round(Number(rawMax) || 1))
+      const safeCurrent = Math.max(0, Math.min(safeMax, Math.round(Number(rawCurrent) || 0)))
+      return { ...c, ...patch, current: safeCurrent, max: safeMax }
     })
-  }
-
-  function adjustCounter(id: string, delta: number) {
+    const changed = nextCounters.find((c) => c.id === id)
+    if (!changed || !isHealthCounter(changed.name)) {
+      scheduleSave({
+        ...local,
+        counters: nextCounters,
+      })
+      return
+    }
+    const nextHpStatValue = String(Math.max(0, Math.round(Number(changed.max) || 0)))
     scheduleSave({
       ...local,
-      counters: local.counters.map((c) =>
-        c.id === id ? { ...c, current: Math.max(0, Math.min(c.max, c.current + delta)) } : c
-      ),
+      counters: nextCounters,
+      stats: local.stats.map((s) => (isHpStat(s.name) ? { ...s, value: nextHpStatValue } : s)),
     })
   }
 
@@ -107,8 +218,10 @@ export function CharacterSheet({
   }
 
   function spendSkillPointOnStat(statId: string, delta: 1 | -1) {
+    if (statPointsLocked && !gmEditing) return
     const pointsIdx = local.counters.findIndex((c) => isSkillPointCounter(c.name))
     if (pointsIdx < 0) return
+    const hpIdx = local.counters.findIndex((c) => isHealthCounter(c.name))
     const pointsCounter = local.counters[pointsIdx]
     const stat = local.stats.find((s) => s.id === statId)
     if (!stat) return
@@ -117,6 +230,30 @@ export function CharacterSheet({
     if (!Number.isFinite(currentStat)) return
     if (delta === 1 && pointsCounter.current <= 0) return
     if (delta === -1 && currentStat <= 0) return
+
+    if (isHpStat(stat.name) && hpIdx >= 0) {
+      const currentSpent = Math.max(0, Math.round(currentStat))
+      const nextSpent = Math.max(0, currentSpent + delta)
+      const nextMaxHp = computeMaxHpBySpentPoints(
+        nextSpent,
+        local.sheet_preset_id ?? null,
+        local.class_status,
+        HP_BASE_VALUE
+      )
+
+      scheduleSave({
+        ...local,
+        counters: local.counters.map((c, i) => {
+          if (i === pointsIdx) return { ...c, current: Math.max(0, c.current - delta) }
+          if (i === hpIdx) return { ...c, max: nextMaxHp, current: Math.min(c.current, nextMaxHp) }
+          return c
+        }),
+        stats: local.stats.map((s) =>
+          s.id === statId ? { ...s, value: String(nextSpent) } : s
+        ),
+      })
+      return
+    }
 
     scheduleSave({
       ...local,
@@ -129,47 +266,37 @@ export function CharacterSheet({
     })
   }
 
-  function spendSkillPointOnHp(delta: 1 | -1) {
-    const pointsIdx = local.counters.findIndex((c) => isSkillPointCounter(c.name))
-    const hpIdx = local.counters.findIndex((c) => isHealthCounter(c.name))
-    if (pointsIdx < 0 || hpIdx < 0) return
-    const pointsCounter = local.counters[pointsIdx]
-    const hpCounter = local.counters[hpIdx]
-    const currentSpent = inferSpentPointsFromMaxHp(
-      hpCounter.max,
-      local.sheet_preset_id ?? null,
-      local.class_status,
-      HP_BASE_VALUE
-    )
-    if (delta === 1 && pointsCounter.current <= 0) return
-    if (delta === -1 && currentSpent <= 0) return
-
-    const nextSpent = Math.max(0, currentSpent + delta)
-    const nextMaxHp = computeMaxHpBySpentPoints(
-      nextSpent,
-      local.sheet_preset_id ?? null,
-      local.class_status,
-      HP_BASE_VALUE
-    )
-
-    scheduleSave({
-      ...local,
-      counters: local.counters.map((c, i) => {
-        if (i === pointsIdx) return { ...c, current: Math.max(0, c.current - delta) }
-        if (i === hpIdx) return { ...c, max: nextMaxHp, current: Math.min(c.current, nextMaxHp) }
-        return c
-      }),
-    })
-  }
-
   function updateTextField(id: string, patch: Partial<TextField>) {
+    if (specialFieldLocks.has(id) && !gmEditing) return
     scheduleSave({
       ...local,
       text_fields: (local.text_fields ?? []).map((f) => (f.id === id ? { ...f, ...patch } : f)),
     })
   }
 
+  function toggleSpecialFieldLock(fieldId: string) {
+    if (!gmEditing) return
+    const next = new Set(local.special_field_locks ?? [])
+    if (next.has(fieldId)) next.delete(fieldId)
+    else next.add(fieldId)
+    scheduleSave({
+      ...local,
+      special_field_locks: [...next],
+    })
+  }
+
+  function toggleStatPointsLock() {
+    if (!gmEditing) return
+    scheduleSave({
+      ...local,
+      stat_points_locked: !statPointsLocked,
+    })
+  }
+
   const textFields = local.text_fields ?? []
+  const templateSelected = Boolean(local.sheet_preset_id)
+  const resolvedPresetId = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status)
+  const thresholdRows = getThresholdEffectsForCharacter(local.sheet_preset_id ?? null, local.class_status)
   const activePresetLabel =
     SHEET_PRESETS.find((preset) => preset.id === (local.sheet_preset_id as SheetPresetId | undefined))?.label ??
     null
@@ -202,22 +329,13 @@ export function CharacterSheet({
           </p>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            label="Имя"
-            value={local.name}
-            onChange={(e) => updateField('name', e.target.value)}
-            placeholder="Имя персонажа"
-            disabled={viewOnly}
-          />
-          <Input
-            label="Класс / Статус"
-            value={local.class_status}
-            onChange={(e) => updateField('class_status', e.target.value)}
-            placeholder="Воин, Маг, NPC…"
-            disabled={viewOnly}
-          />
-        </div>
+        <Input
+          label="Имя"
+          value={local.name}
+          onChange={(e) => updateField('name', e.target.value)}
+          placeholder="Имя персонажа"
+          disabled={viewOnly}
+        />
 
         {!viewOnly && (
           <section>
@@ -257,19 +375,14 @@ export function CharacterSheet({
           </section>
         )}
 
-        {!restrictedView && (
-          <Textarea
-            label="Описание / Инвентарь"
-            value={local.description}
-            onChange={(e) => updateField('description', e.target.value)}
-            placeholder="Внешность, снаряжение, заметки…"
-            disabled={viewOnly}
-            rows={3}
-          />
+        {!templateSelected && (
+          <p className="text-xs text-vng-muted border border-vng-border px-2 py-2 leading-relaxed">
+            Сначала выберите шаблон листика. После этого откроются способности, счетчики и характеристики.
+          </p>
         )}
 
         {/* Custom text blocks — особые поля листа */}
-        {!restrictedView && (
+        {templateSelected && !restrictedView && (
         <section>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-vng-muted">
@@ -280,13 +393,16 @@ export function CharacterSheet({
             Набор особых полей фиксирован правилами листика. Можно менять только содержимое.
           </p>
           <div className="flex flex-col gap-3">
-            {textFields.map((field) => (
-              <div
-                key={field.id}
-                className="rounded-lg border border-vng-border/80 bg-vng-bg/60 p-3 space-y-2"
-              >
+            {textFields.map((field) => {
+              const fieldLocked = specialFieldLocks.has(field.id)
+              const fieldReadOnly = viewOnly || (!gmEditing && fieldLocked)
+              return (
+                <div
+                  key={field.id}
+                  className="rounded-lg border border-vng-border/80 bg-vng-bg/60 p-3 space-y-2"
+                >
                 <div className="flex items-center gap-2">
-                  {viewOnly ? (
+                  {fieldReadOnly ? (
                     <span className="text-xs font-semibold uppercase text-vng-amber">{field.name}</span>
                   ) : (
                     <input
@@ -295,9 +411,26 @@ export function CharacterSheet({
                       onChange={(e) => updateTextField(field.id, { name: e.target.value })}
                     />
                   )}
+                  {gmEditing && (
+                    <button
+                      type="button"
+                      className={`vng-tui-btn text-[10px] ${fieldLocked ? 'vng-tui-btn--active' : ''}`}
+                      onClick={() => toggleSpecialFieldLock(field.id)}
+                      title={fieldLocked ? 'Разблокировать поле для игрока' : 'Заблокировать поле для игрока'}
+                    >
+                      {fieldLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                      {fieldLocked ? 'ЗАКРЫТО' : 'ОТКРЫТО'}
+                    </button>
+                  )}
                   {!viewOnly && <span className="text-[10px] text-vng-muted">фиксировано</span>}
                 </div>
-                {viewOnly ? (
+                {isAbilitiesField(field.name) ? (
+                  <AbilityLevelsTable
+                    value={field.value}
+                    readOnly={fieldReadOnly}
+                    onChange={(next) => updateTextField(field.id, { value: next })}
+                  />
+                ) : fieldReadOnly ? (
                   <p className="text-sm whitespace-pre-wrap text-vng-text/90">{field.value || '—'}</p>
                 ) : (
                   <textarea
@@ -307,11 +440,14 @@ export function CharacterSheet({
                     placeholder="Текст поля…"
                   />
                 )}
+                {!gmEditing && fieldLocked && (
+                  <p className="text-[10px] text-vng-muted">Поле заблокировано ГМ</p>
+                )}
               </div>
-            ))}
+            )})}
             {textFields.length === 0 && (
               <p className="text-xs text-vng-muted text-center py-3 border border-dashed border-vng-border rounded-lg">
-                Добавьте поля: способности, инвентарь, особые правила…
+                Добавьте поля: способности, особые правила…
               </p>
             )}
           </div>
@@ -319,6 +455,7 @@ export function CharacterSheet({
         )}
 
         {/* Counters */}
+        {templateSelected && (
         <section>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-vng-muted">
@@ -340,34 +477,9 @@ export function CharacterSheet({
                 counter={counter}
                 readOnly={viewOnly || restrictedView}
                 hpLocked={healthLocked && isHealthCounter(counter.name)}
-                hpSpendEnabled={!viewOnly && isHealthCounter(counter.name) && local.counters.some((c) => isSkillPointCounter(c.name))}
-                hpSpendState={
-                  isHealthCounter(counter.name)
-                    ? {
-                        pointsSpent: inferSpentPointsFromMaxHp(
-                          counter.max,
-                          local.sheet_preset_id ?? null,
-                          local.class_status,
-                          HP_BASE_VALUE
-                        ),
-                        thresholdEffect:
-                          getStatEffectForCharacterSheet(
-                            local.sheet_preset_id ?? null,
-                            local.class_status,
-                            inferSpentPointsFromMaxHp(
-                              counter.max,
-                              local.sheet_preset_id ?? null,
-                              local.class_status,
-                              HP_BASE_VALUE
-                            )
-                          ) ?? null,
-                      }
-                    : undefined
-                }
-                onAdjust={(d) => adjustCounter(counter.id, d)}
+                inspirationLocked={!gmEditing && isInspirationCounter(counter.name)}
                 onUpdate={(p) => updateCounter(counter.id, p)}
                 onRemove={() => removeCounter(counter.id)}
-                onSpendHpPoint={isHealthCounter(counter.name) ? (d) => spendSkillPointOnHp(d) : undefined}
               />
             ))}
             {(restrictedView
@@ -379,18 +491,73 @@ export function CharacterSheet({
             )}
           </div>
         </section>
+        )}
 
         {/* Stats grid */}
-        {!restrictedView && (
+        {templateSelected && !restrictedView && (
         <section>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-vng-muted">Характеристики</h3>
-            {!viewOnly && (
-              <Button variant="ghost" size="sm" type="button" onClick={addStat}>
-                <PlusCircle size={14} /> Добавить
+            <div className="flex items-center gap-2">
+              <Button
+                variant={showThresholdTable ? 'secondary' : 'ghost'}
+                size="sm"
+                type="button"
+                onClick={() => setShowThresholdTable((v) => !v)}
+              >
+                {showThresholdTable ? 'Скрыть пороги' : 'Пороги'}
               </Button>
-            )}
+              {gmEditing && (
+                <button
+                  type="button"
+                  className={`vng-tui-btn text-[10px] ${statPointsLocked ? 'vng-tui-btn--active' : ''}`}
+                  onClick={toggleStatPointsLock}
+                  title={statPointsLocked ? 'Разрешить игроку менять статы' : 'Запретить игроку менять статы'}
+                >
+                  {statPointsLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                  {statPointsLocked ? 'СТАТЫ ЗАКРЫТЫ' : 'СТАТЫ ОТКРЫТЫ'}
+                </button>
+              )}
+              {!viewOnly && (gmEditing || !statPointsLocked) && (
+                <Button variant="ghost" size="sm" type="button" onClick={addStat}>
+                  <PlusCircle size={14} /> Добавить
+                </Button>
+              )}
+            </div>
           </div>
+          {showThresholdTable && (
+            <div className="mb-3 border border-vng-border rounded-lg overflow-hidden">
+              <div className="px-2 py-1 text-xs uppercase tracking-wide text-vng-muted border-b border-vng-border bg-vng-elevated/40">
+                Таблица модификаторов порога ({resolvedPresetId ?? 'не определен'})
+              </div>
+              {thresholdRows.length > 0 ? (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-vng-muted border-b border-vng-border">
+                      <th className="text-left px-2 py-1">Значение стата</th>
+                      <th className="text-left px-2 py-1">Эффект порога</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {thresholdRows.map((row) => (
+                      <tr key={`${row.threshold}-${String(row.effect)}`} className="border-b border-vng-border/40">
+                        <td className="px-2 py-1 vng-mono">
+                          {row.threshold === 0 && resolvedPresetId === 'casual' ? 'Любое' : row.threshold}
+                        </td>
+                        <td className="px-2 py-1 vng-mono text-vng-amber">
+                          {typeof row.effect === 'number' && row.effect > 0 ? `+${row.effect}` : String(row.effect)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="px-2 py-2 text-xs text-vng-muted">
+                  Для этого листика таблица порогов не найдена.
+                </p>
+              )}
+            </div>
+          )}
           {(() => {
             const spCounter = local.counters.find((c) => isSkillPointCounter(c.name))
             return (
@@ -400,6 +567,7 @@ export function CharacterSheet({
                   {spCounter?.current ?? 0}
                 </span>
                 {' '}— тратьте кнопками +/− у статов
+                {!gmEditing && statPointsLocked ? ' (заблокировано ГМ)' : ''}
               </p>
             )
           })()}
@@ -411,8 +579,10 @@ export function CharacterSheet({
                 classStatus={local.class_status}
                 sheetPresetId={local.sheet_preset_id ?? null}
                 index={index}
-                readOnly={viewOnly}
-                canSpend={!viewOnly && local.counters.some((c) => isSkillPointCounter(c.name))}
+                readOnly={viewOnly || (!gmEditing && statPointsLocked)}
+                canSpend={!viewOnly && !statPointsLocked && local.counters.some((c) => isSkillPointCounter(c.name))}
+                researcherMode={researcherMode}
+                canSetInfinity={Boolean(gmEditing)}
                 onUpdate={(p) => updateStat(stat.id, p)}
                 onRemove={() => removeStat(stat.id)}
                 onSpendPoint={(d) => spendSkillPointOnStat(stat.id, d)}
@@ -429,38 +599,68 @@ export function CharacterSheet({
   )
 }
 
+function AbilityLevelsTable({
+  value,
+  readOnly,
+  onChange,
+}: {
+  value: string
+  readOnly?: boolean
+  onChange: (next: string) => void
+}) {
+  const levels = parseAbilityLevels(value)
+  return (
+    <div className="min-w-0">
+      <table className="w-full table-fixed border border-vng-border text-xs">
+        <thead>
+          <tr>
+            <th className="w-20 px-2 py-1 border-b border-vng-border text-left uppercase text-vng-muted">Уровень</th>
+            <th className="px-2 py-1 border-b border-vng-border text-left uppercase text-vng-muted">Способность</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 7 }, (_, idx) => idx + 1).map((level) => (
+            <tr key={level} className="border-b border-vng-border/60">
+              <td className="px-2 py-1 align-top font-semibold text-vng-amber">Ур. {level}</td>
+              <td className="px-2 py-1">
+                {readOnly ? (
+                  <span className="text-sm text-vng-text/90 break-words">{levels[level] || '—'}</span>
+                ) : (
+                  <textarea
+                    className="w-full min-h-[56px] bg-transparent text-sm border border-vng-border/60 rounded px-2 py-1 focus:outline-none focus:border-vng-amber/40 resize-y"
+                    value={levels[level] ?? ''}
+                    onChange={(e) => {
+                      const nextLevels = { ...levels, [level]: e.target.value }
+                      onChange(buildAbilityLevelsText(nextLevels))
+                    }}
+                    placeholder={`Способности ${level} уровня (по одной с новой строки)`}
+                  />
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function CounterRow({
   counter,
   readOnly,
   hpLocked,
-  hpSpendEnabled,
-  hpSpendState,
-  onAdjust,
+  inspirationLocked,
   onUpdate,
   onRemove,
-  onSpendHpPoint,
 }: {
   counter: CounterField
   readOnly?: boolean
   hpLocked?: boolean
-  hpSpendEnabled?: boolean
-  hpSpendState?: { pointsSpent: number; thresholdEffect: StatEffectValue | null }
-  onAdjust: (delta: number) => void
+  inspirationLocked?: boolean
   onUpdate: (patch: Partial<CounterField>) => void
   onRemove: () => void
-  onSpendHpPoint?: (delta: 1 | -1) => void
 }) {
-  const counterReadOnly = readOnly || hpLocked
-  const hpEffectText =
-    hpSpendState?.thresholdEffect === null
-      ? null
-      : typeof hpSpendState?.thresholdEffect === 'string'
-        ? hpSpendState.thresholdEffect
-        : hpSpendState && hpSpendState.thresholdEffect > 0
-          ? `+${hpSpendState.thresholdEffect}`
-          : hpSpendState
-            ? `${hpSpendState.thresholdEffect}`
-            : null
+  const counterReadOnly = readOnly || hpLocked || inspirationLocked
   return (
     <div className="vng-counter-block">
       <div className="flex items-center gap-2 mb-2">
@@ -482,53 +682,37 @@ function CounterRow({
       {hpLocked && (
         <p className="text-xs text-vng-muted mb-1">HP меняет только мастер игры</p>
       )}
-      <SegmentedHpBar current={counter.current} max={counter.max} />
-      {hpSpendEnabled && onSpendHpPoint && (
-        <div className="mt-2 border border-vng-border/70 rounded px-2 py-1.5">
-          <p className="text-[11px] text-vng-muted">
-            Вложено очков в HP: <span className="text-vng-amber font-semibold">{hpSpendState?.pointsSpent ?? 0}</span>
-          </p>
-          {hpEffectText && (
-            <p className="text-[11px] text-vng-muted">
-              Эффект порога для HP: <span className="text-vng-amber font-semibold">{hpEffectText}</span>
-            </p>
-          )}
-          <div className="mt-1 flex items-center gap-1">
-            <Button size="sm" variant="secondary" type="button" onClick={() => onSpendHpPoint(-1)}>
-              -1 HP очко
-            </Button>
-            <Button size="sm" variant="secondary" type="button" onClick={() => onSpendHpPoint(1)}>
-              +1 HP очко
-            </Button>
-          </div>
-        </div>
+      {inspirationLocked && (
+        <p className="text-xs text-vng-muted mb-1">Очки вдохновения выдаёт только ГМ</p>
       )}
+      <SegmentedHpBar current={counter.current} max={counter.max} />
       <div className="flex items-center justify-between mt-2">
         <div className="flex items-center gap-2">
-          {!counterReadOnly && (
-            <Button variant="secondary" size="sm" type="button" onClick={() => onAdjust(-1)}>
-              <Minus size={14} />
-            </Button>
-          )}
           <span className="vng-mono text-lg font-bold vng-glow-cyan">
             {counter.current}
             <span className="text-vng-muted text-sm font-normal"> / {counter.max}</span>
           </span>
-          {!counterReadOnly && (
-            <Button variant="secondary" size="sm" type="button" onClick={() => onAdjust(1)}>
-              <Plus size={14} />
-            </Button>
-          )}
         </div>
         {!counterReadOnly && (
-          <input
-            type="number"
-            min={1}
-            className="w-16 px-2 py-1 text-xs rounded bg-vng-elevated border border-vng-border text-right"
-            value={counter.max}
-            onChange={(e) => onUpdate({ max: Math.max(1, parseInt(e.target.value) || 1) })}
-            title="Максимум"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              className="w-16 px-2 py-1 text-xs rounded bg-vng-elevated border border-vng-border text-right"
+              value={counter.current}
+              onChange={(e) => onUpdate({ current: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+              title="Текущее"
+            />
+            <span className="text-xs text-vng-muted">/</span>
+            <input
+              type="number"
+              min={1}
+              className="w-16 px-2 py-1 text-xs rounded bg-vng-elevated border border-vng-border text-right"
+              value={counter.max}
+              onChange={(e) => onUpdate({ max: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+              title="Максимум"
+            />
+          </div>
         )}
       </div>
     </div>
@@ -542,6 +726,8 @@ function StatRow({
   index,
   readOnly,
   canSpend,
+  researcherMode,
+  canSetInfinity,
   onUpdate,
   onRemove,
   onSpendPoint,
@@ -552,10 +738,16 @@ function StatRow({
   index: number
   readOnly?: boolean
   canSpend?: boolean
+  researcherMode?: boolean
+  canSetInfinity?: boolean
   onUpdate: (patch: Partial<StatField>) => void
   onRemove: () => void
   onSpendPoint?: (delta: 1 | -1) => void
 }) {
+  const statRaw = String(stat.value ?? '').trim()
+  const isPosInfinity = statRaw === '∞' || statRaw.toLowerCase() === '+∞' || statRaw.toLowerCase() === 'inf' || statRaw.toLowerCase() === '+inf'
+  const isNegInfinity = statRaw === '-∞' || statRaw.toLowerCase() === '-inf'
+  const isInfinity = isPosInfinity || isNegInfinity
   const numericValue = Number(stat.value)
   const effect: StatEffectValue | null = Number.isFinite(numericValue)
     ? getStatEffectForCharacterSheet(sheetPresetId, classStatus, numericValue)
@@ -610,6 +802,31 @@ function StatRow({
                 +1
               </Button>
             </div>
+          )}
+          {researcherMode && canSetInfinity && (
+            <div className="mt-1 flex items-center justify-center gap-1">
+              <Button
+                size="sm"
+                variant={isPosInfinity ? 'primary' : 'secondary'}
+                type="button"
+                onClick={() => onUpdate({ value: isPosInfinity ? '0' : '∞' })}
+              >
+                +∞
+              </Button>
+              <Button
+                size="sm"
+                variant={isNegInfinity ? 'primary' : 'secondary'}
+                type="button"
+                onClick={() => onUpdate({ value: isNegInfinity ? '0' : '-∞' })}
+              >
+                -∞
+              </Button>
+            </div>
+          )}
+          {researcherMode && isInfinity && (
+            <p className="mt-1 text-[10px] leading-snug text-center text-vng-muted">
+              Бесконечность задана ГМ
+            </p>
           )}
         </>
       )}

@@ -14,6 +14,12 @@ export interface RoomInfo {
   gm_id: string
 }
 
+export interface PlaylistEntry {
+  id: string
+  title: string
+  url: string
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${getApiBase()}${path}`, {
     ...init,
@@ -48,4 +54,8 @@ export async function apiGetRoomById(roomId: string) {
   return apiFetch<{
     room: RoomInfo
   }>(`/api/rooms/${encodeURIComponent(roomId)}`)
+}
+
+export async function apiGetPlaylistEntries(url: string) {
+  return apiFetch<{ entries: PlaylistEntry[] }>(`/api/music/playlist?url=${encodeURIComponent(url)}`)
 }
