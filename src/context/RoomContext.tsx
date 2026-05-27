@@ -22,6 +22,7 @@ import type {
   RoomStageFx,
   RoomTheme,
   ScreenMessage,
+  VoiceSignal,
 } from '@/types'
 import { DICE_ROLL_COOLDOWN_MS } from '@/lib/diceCooldown'
 import type { DiceSides } from '@/types'
@@ -60,6 +61,7 @@ interface RoomContextValue {
   levelId: string | null
   levelVariant: 'main' | 'alt'
   showLevelToPlayers: boolean
+  voiceBlockedPlayerIds: string[]
   presence: RoomPresence
   canRollDice: boolean
   diceCooldownSec: number
@@ -104,6 +106,9 @@ interface RoomContextValue {
   deleteNpcCharacter: (playerId: string) => void
   setHandRaised: (raised: boolean) => void
   pingPlayer: (playerId: string) => void
+  setPlayerVoiceAllowed: (playerId: string, allowed: boolean) => void
+  sendVoiceSignal: (targetPlayerId: string | null, signal: VoiceSignal) => void
+  onVoiceSignal: (listener: (fromPlayerId: string, signal: VoiceSignal) => void) => () => void
 }
 
 const RoomContext = createContext<RoomContextValue | null>(null)
@@ -214,6 +219,7 @@ export function RoomProvider({
   const [levelId, setLevelIdState] = useState<string | null>(() => parseRoomExtras({}).levelId)
   const [levelVariant, setLevelVariantState] = useState<'main' | 'alt'>(() => parseRoomExtras({}).levelVariant)
   const [showLevelToPlayers, setShowLevelToPlayersState] = useState<boolean>(() => parseRoomExtras({}).showLevelToPlayers)
+  const [voiceBlockedPlayerIds, setVoiceBlockedPlayerIds] = useState<string[]>([])
   const [presence, setPresence] = useState<RoomPresence>({ handsRaised: [], diceAllowed: [] })
   const [diceCooldownUntil, setDiceCooldownUntil] = useState(0)
   const [cooldownTick, setCooldownTick] = useState(0)
@@ -222,6 +228,7 @@ export function RoomProvider({
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const socketRef = useRef<RoomSocket | null>(null)
+  const voiceSignalListenersRef = useRef(new Set<(fromPlayerId: string, signal: VoiceSignal) => void>())
 
   const extrasSetters = useMemo(
     () => ({
@@ -249,6 +256,7 @@ export function RoomProvider({
       setChatMessages(state.chatMessages)
       setActiveEncounter(state.activeEncounter)
       setPresence(state.presence)
+      setVoiceBlockedPlayerIds(state.voiceBlockedPlayerIds)
       applyExtras(extrasSetters, state.extras)
 
       const me = state.players.find((p) => p.id === playerId)
@@ -313,6 +321,18 @@ export function RoomProvider({
             handsRaised: msg.hands_raised ?? [],
             diceAllowed: msg.dice_allowed ?? [],
           })
+          break
+        case 'VOICE_SIGNAL':
+          for (const listener of voiceSignalListenersRef.current) {
+            try {
+              listener(msg.from_player_id, msg.signal)
+            } catch {
+              /* ignore listener errors */
+            }
+          }
+          break
+        case 'VOICE_PERMISSION_UPDATE':
+          setVoiceBlockedPlayerIds(Array.isArray(msg.blocked_player_ids) ? msg.blocked_player_ids : [])
           break
         case 'PLAYER_SIGNAL':
           if (msg.target_player_id === initialSession.playerId && msg.from_player_id !== initialSession.playerId) {
@@ -432,6 +452,21 @@ export function RoomProvider({
 
   const pingPlayer = useCallback((playerId: string) => {
     socketRef.current?.send({ type: 'PING_PLAYER', player_id: playerId })
+  }, [])
+
+  const setPlayerVoiceAllowed = useCallback((playerId: string, allowed: boolean) => {
+    socketRef.current?.send({ type: 'SET_VOICE_SPEAKING_PERMISSION', player_id: playerId, allowed })
+  }, [])
+
+  const sendVoiceSignal = useCallback((targetPlayerId: string | null, signal: VoiceSignal) => {
+    socketRef.current?.send({ type: 'VOICE_SIGNAL', target_player_id: targetPlayerId, signal })
+  }, [])
+
+  const onVoiceSignal = useCallback((listener: (fromPlayerId: string, signal: VoiceSignal) => void) => {
+    voiceSignalListenersRef.current.add(listener)
+    return () => {
+      voiceSignalListenersRef.current.delete(listener)
+    }
   }, [])
 
   const sendChat = useCallback((text: string) => {
@@ -651,6 +686,7 @@ export function RoomProvider({
       levelId,
       levelVariant,
       showLevelToPlayers,
+      voiceBlockedPlayerIds,
       presence,
       canRollDice,
       diceCooldownSec,
@@ -663,6 +699,9 @@ export function RoomProvider({
       rerollInspired,
       setHandRaised,
       pingPlayer,
+      setPlayerVoiceAllowed,
+      sendVoiceSignal,
+      onVoiceSignal,
       sendChat,
       transferGm,
       publishEncounter,
@@ -710,6 +749,7 @@ export function RoomProvider({
       levelId,
       levelVariant,
       showLevelToPlayers,
+      voiceBlockedPlayerIds,
       presence,
       canRollDice,
       diceCooldownSec,
@@ -748,6 +788,9 @@ export function RoomProvider({
       deleteNpcCharacter,
       setHandRaised,
       pingPlayer,
+      setPlayerVoiceAllowed,
+      sendVoiceSignal,
+      onVoiceSignal,
     ]
   )
 

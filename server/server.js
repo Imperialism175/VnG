@@ -85,6 +85,7 @@ function ensureAbilityLevelsText(textFields) {
 }
 
 function getPublicState(room) {
+  if (!(room.voiceBlockedPlayers instanceof Set)) room.voiceBlockedPlayers = new Set()
   return {
     room: {
       id: room.id,
@@ -98,6 +99,7 @@ function getPublicState(room) {
     roll_events: room.rollEvents,
     chat_messages: room.chatMessages,
     active_encounter: room.activeEncounter,
+    voice_blocked_players: [...room.voiceBlockedPlayers],
     ...serializePresence(room),
     ...serializeRoomExtras(room),
   }
@@ -106,6 +108,14 @@ function getPublicState(room) {
 function broadcast(room, payload) {
   for (const client of room.clients) {
     if (client.readyState === 1) client.send(JSON.stringify(payload))
+  }
+}
+
+function sendToPlayer(room, targetPlayerId, payload) {
+  for (const client of room.clients) {
+    if (client.readyState !== 1) continue
+    if (client.playerId !== targetPlayerId) continue
+    client.send(JSON.stringify(payload))
   }
 }
 
@@ -130,6 +140,7 @@ function removePlayerFromRoom(room, playerId) {
   clearPlayerPresence(room, playerId)
   room.diceAllowed?.delete?.(playerId)
   room.lastDiceRollAt?.delete?.(playerId)
+  room.voiceBlockedPlayers?.delete?.(playerId)
 
   if (room.playerThemes && typeof room.playerThemes === 'object') {
     delete room.playerThemes[playerId]
@@ -479,6 +490,7 @@ const httpServer = createServer(async (req, res) => {
         chatMessages: [],
         activeEncounter: null,
         clients: new Set(),
+        voiceBlockedPlayers: new Set(),
         ...createRoomExtras(),
       }
       initRoomPresence(room)
@@ -558,6 +570,7 @@ wss.on('connection', (ws, req) => {
   }
 
   room.clients.add(ws)
+  if (!(room.voiceBlockedPlayers instanceof Set)) room.voiceBlockedPlayers = new Set()
   ws.playerId = playerId
   send(ws, { type: 'STATE_SYNC', state: getPublicState(room), your_gm: player.is_gm })
   broadcastState(room)
@@ -677,6 +690,33 @@ wss.on('connection', (ws, req) => {
         from_player_id: playerId,
         from_name: player.name,
       })
+    }
+
+    if (msg.type === 'SET_VOICE_SPEAKING_PERMISSION' && player.is_gm) {
+      const targetId = String(msg.player_id ?? '')
+      if (!targetId || targetId === playerId) return
+      const target = room.players.get(targetId)
+      if (!target || target.is_gm) return
+      if (!(room.voiceBlockedPlayers instanceof Set)) room.voiceBlockedPlayers = new Set()
+      if (msg.allowed) room.voiceBlockedPlayers.delete(targetId)
+      else room.voiceBlockedPlayers.add(targetId)
+      broadcast(room, { type: 'VOICE_PERMISSION_UPDATE', blocked_player_ids: [...room.voiceBlockedPlayers] })
+    }
+
+    if (msg.type === 'VOICE_SIGNAL') {
+      const signal = msg.signal
+      if (!signal || typeof signal !== 'object') return
+      const payload = { type: 'VOICE_SIGNAL', from_player_id: playerId, signal }
+      const targetId = typeof msg.target_player_id === 'string' ? msg.target_player_id : null
+      if (targetId) {
+        if (!room.players.has(targetId) || targetId === playerId) return
+        sendToPlayer(room, targetId, payload)
+      } else {
+        for (const p of room.players.values()) {
+          if (p.id === playerId) continue
+          sendToPlayer(room, p.id, payload)
+        }
+      }
     }
 
     if (msg.type === 'DICE_ROLL') {

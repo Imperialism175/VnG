@@ -25,6 +25,7 @@ import { ThemeColorEditor } from '@/components/RoomTheme/ThemeColorEditor'
 import { getRoomSessionStartMs } from '@/lib/sessionTime'
 import { getLevelPreset } from '@/lib/levels'
 import { getStatEffectForCharacterSheet } from '@/lib/characterSheets'
+import { RoomVoiceChat } from '@/components/VoiceChat/RoomVoiceChat'
 
 const MOBILE_UI_SCALE_KEY = 'vng_mobile_ui_scale'
 
@@ -103,6 +104,7 @@ function GameRoomContent() {
     showScreenMessage, dismissScreenMessage, setHallOfFame,
     setStageFx, setPlayerFlashlight,
     presence, canRollDice, diceCooldownSec, setHandRaised, pingPlayer,
+    voiceBlockedPlayerIds, setPlayerVoiceAllowed, sendVoiceSignal, onVoiceSignal,
   } = useRoom()
 
   const [playerTab, setPlayerTab] = useState<PlayerTabId>('sheet')
@@ -450,6 +452,16 @@ function GameRoomContent() {
       )}
 
       <RoomMusicPlayback roomId={room?.id ?? ''} music={music} />
+      <RoomVoiceChat
+        sessionPlayerId={session.playerId}
+        isGm={session.isGm}
+        players={players}
+        characters={characters}
+        voiceBlockedPlayerIds={voiceBlockedPlayerIds}
+        onSetPlayerVoiceAllowed={setPlayerVoiceAllowed}
+        onSendVoiceSignal={sendVoiceSignal}
+        onVoiceSignal={onVoiceSignal}
+      />
 
       <div
         className="lg:hidden shrink-0 max-w-[1600px] w-full mx-auto px-2 sm:px-3 pb-2 overflow-x-hidden"

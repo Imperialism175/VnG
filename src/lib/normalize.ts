@@ -12,6 +12,7 @@ import type {
   ScreenMessage,
   StatField,
   TextField,
+  VoiceSignal,
 } from '@/types'
 import { parseRoomExtras } from '@/lib/roomExtras'
 
@@ -35,6 +36,7 @@ export interface RoomPublicState {
   music?: RoomMusic
   active_poll?: RoomPoll | null
   screen_message?: ScreenMessage | null
+  voice_blocked_players?: string[]
 }
 
 export type ServerMessage =
@@ -49,6 +51,8 @@ export type ServerMessage =
   | { type: 'ENCOUNTER_UPDATE'; encounter: Encounter | null }
   | { type: 'ROOM_EXTRAS_UPDATE'; extras: Record<string, unknown> }
   | { type: 'PRESENCE_UPDATE'; hands_raised: string[]; dice_allowed: string[] }
+  | { type: 'VOICE_SIGNAL'; from_player_id: string; signal: VoiceSignal }
+  | { type: 'VOICE_PERMISSION_UPDATE'; blocked_player_ids: string[] }
   | { type: 'PLAYER_SIGNAL'; target_player_id: string; from_player_id: string; from_name: string }
   | { type: 'ERROR'; message: string }
 
@@ -92,6 +96,8 @@ export type ClientMessage =
   | { type: 'SET_HAND_RAISED'; raised: boolean }
   | { type: 'SET_DICE_PERMISSION'; player_id: string; allowed: boolean }
   | { type: 'PING_PLAYER'; player_id: string }
+  | { type: 'VOICE_SIGNAL'; target_player_id?: string | null; signal: VoiceSignal }
+  | { type: 'SET_VOICE_SPEAKING_PERMISSION'; player_id: string; allowed: boolean }
 
 export function normalizeCharacter(raw: Record<string, unknown>): Character {
   return {
@@ -248,6 +254,7 @@ export function applyPublicState(state: RoomPublicState) {
     activeEncounter: state.active_encounter
       ? normalizeEncounter(state.active_encounter as unknown as Record<string, unknown>)
       : null,
+    voiceBlockedPlayerIds: Array.isArray(state.voice_blocked_players) ? state.voice_blocked_players : [],
     presence: parsePresence(state),
     extras: parseRoomExtras(state as unknown as Record<string, unknown>),
   }

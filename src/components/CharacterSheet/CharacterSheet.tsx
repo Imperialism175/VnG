@@ -536,7 +536,7 @@ export function CharacterSheet({
                 type="button"
                 onClick={() => setShowThresholdTable((v) => !v)}
               >
-                {showThresholdTable ? 'Скрыть пороги' : 'Пороги'}
+                {showThresholdTable ? 'Скрыть таблицу' : 'Таблица'}
               </Button>
               {gmEditing && (
                 <button
