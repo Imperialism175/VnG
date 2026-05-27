@@ -1,12 +1,16 @@
 import { spawn } from 'node:child_process'
+import { mkdir, chmod } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import play from 'play-dl'
-import ytdl from '@distube/ytdl-core'
+import { YtdlCore, toPipeableStream } from '@ybd-project/ytdl-core'
+import YTDlpWrap from 'yt-dlp-wrap'
 import { parseYoutubeVideoId } from './roomExtras.js'
 
 const hubs = new Map()
+const ytdlCore = new YtdlCore({ noUpdate: true })
+let downloadedYtDlpPathPromise = null
 
 const DIRECT_AUDIO = /\.(mp3|ogg|opus|wav|m4a|aac|flac|webm)(\?|$)/i
 
@@ -15,6 +19,13 @@ export function detectMusicSource(url) {
   if (DIRECT_AUDIO.test(url) || url.includes('/audio/')) return 'direct'
   if (parseYoutubeVideoId(url)) return 'youtube'
   return null
+}
+
+function normalizeYoutubeWatchUrl(url) {
+  const raw = String(url ?? '').trim()
+  const id = parseYoutubeVideoId(raw)
+  if (id) return `https://www.youtube.com/watch?v=${id}`
+  return raw
 }
 
 function findYtDlp() {
@@ -32,6 +43,32 @@ function findYtDlp() {
     if (c && (c === 'yt-dlp' || c === 'yt-dlp.exe' || existsSync(c))) return c
   }
   return null
+}
+
+async function getOrDownloadYtDlp() {
+  const found = findYtDlp()
+  if (found) return found
+  if (!downloadedYtDlpPathPromise) {
+    downloadedYtDlpPathPromise = (async () => {
+      const cacheDir = join(process.cwd(), '.cache')
+      await mkdir(cacheDir, { recursive: true })
+      const fileName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+      const binPath = join(cacheDir, fileName)
+      if (!existsSync(binPath)) {
+        await YTDlpWrap.downloadFromGithub(binPath)
+        if (process.platform !== 'win32') {
+          await chmod(binPath, 0o755)
+        }
+      }
+      return binPath
+    })()
+  }
+  try {
+    return await downloadedYtDlpPathPromise
+  } catch {
+    downloadedYtDlpPathPromise = null
+    return null
+  }
 }
 
 class RoomMusicHub {
@@ -52,13 +89,13 @@ class RoomMusicHub {
       this.clients.delete(res)
       if (this.clients.size === 0) this.stop()
     })
-    if (!this.started && this.sourceUrl) this._startPipeline()
+    if (!this.started && this.sourceUrl) void this._startPipeline()
   }
 
   start(url, source) {
-    this.sourceUrl = url
+    this.sourceUrl = source === 'youtube' ? normalizeYoutubeWatchUrl(url) : url
     this.source = source
-    if (this.clients.size > 0) this._startPipeline()
+    if (this.clients.size > 0) void this._startPipeline()
   }
 
   _writeHeaders(res) {
@@ -79,7 +116,7 @@ class RoomMusicHub {
     }
   }
 
-  _startPipeline() {
+  async _startPipeline() {
     if (this.started || !this.sourceUrl) return
     this.started = true
 
@@ -88,7 +125,7 @@ class RoomMusicHub {
       return
     }
 
-    const ytDlp = findYtDlp()
+    const ytDlp = await getOrDownloadYtDlp()
     if (!ytDlp) {
       this._streamViaYtdlCore(this.sourceUrl)
       return
@@ -158,16 +195,19 @@ class RoomMusicHub {
 
   async _streamViaYtdlCore(url) {
     try {
-      const info = await ytdl.getInfo(url)
-      const audioFormat = ytdl.chooseFormat(info.formats, {
+      const info = await ytdlCore.getBasicInfo(url, {
         quality: 'highestaudio',
         filter: 'audioonly',
       })
-      this.contentType = String(audioFormat?.mimeType ?? '').includes('webm') ? 'audio/webm' : 'audio/mp4'
-      this.fallbackStream = ytdl.downloadFromInfo(info, {
-        format: audioFormat,
+      const audioFormats = YtdlCore.filterFormats(info.formats, 'audioonly')
+      const best = audioFormats[0]
+      this.contentType = String(best?.mimeType ?? '').includes('webm') ? 'audio/webm' : 'audio/mp4'
+      const webStream = await ytdlCore.download(url, {
+        quality: 'highestaudio',
+        filter: 'audioonly',
         highWaterMark: 1 << 25,
       })
+      this.fallbackStream = toPipeableStream(webStream)
       this.fallbackStream.on('data', (chunk) => this._broadcast(chunk))
       this.fallbackStream.on('end', () => {
         for (const res of this.clients) {
@@ -263,18 +303,25 @@ export function handleMusicStreamRequest(room, req, res) {
 }
 
 export async function fetchTitleViaYtDlp(url) {
-  const ytDlp = findYtDlp()
+  const normalizedUrl = normalizeYoutubeWatchUrl(url)
+  const ytDlp = await getOrDownloadYtDlp()
   if (!ytDlp) {
     try {
-      const info = await play.video_basic_info(url)
-      const title = String(info?.video_details?.title ?? '').trim()
+      const info = await ytdlCore.getBasicInfo(normalizedUrl)
+      const title = String(info?.videoDetails?.title ?? '').trim()
       return title ? title.slice(0, 200) : null
     } catch {
-      return null
+      try {
+        const info = await play.video_basic_info(normalizedUrl)
+        const title = String(info?.video_details?.title ?? '').trim()
+        return title ? title.slice(0, 200) : null
+      } catch {
+        return null
+      }
     }
   }
   return new Promise((resolve) => {
-    const proc = spawn(ytDlp, ['--print', 'title', '--no-playlist', url], {
+    const proc = spawn(ytDlp, ['--print', 'title', '--no-playlist', normalizedUrl], {
       windowsHide: true,
     })
     let out = ''
@@ -287,10 +334,11 @@ export async function fetchTitleViaYtDlp(url) {
 }
 
 export async function fetchPlaylistEntriesViaYtDlp(url) {
-  const ytDlp = findYtDlp()
+  const normalizedUrl = normalizeYoutubeWatchUrl(url)
+  const ytDlp = await getOrDownloadYtDlp()
   if (!ytDlp) {
     try {
-      const playlist = await play.playlist_info(url, { incomplete: true })
+      const playlist = await play.playlist_info(normalizedUrl, { incomplete: true })
       const videos = await playlist.all_videos()
       const entries = videos
         .slice(0, 100)
@@ -311,7 +359,7 @@ export async function fetchPlaylistEntriesViaYtDlp(url) {
   return new Promise((resolve) => {
     const proc = spawn(
       ytDlp,
-      ['--dump-single-json', '--flat-playlist', '--playlist-end', '100', '--no-warnings', url],
+      ['--dump-single-json', '--flat-playlist', '--playlist-end', '100', '--no-warnings', normalizedUrl],
       { windowsHide: true }
     )
     let out = ''
@@ -349,5 +397,6 @@ export async function fetchPlaylistEntriesViaYtDlp(url) {
 }
 
 export function getYtDlpStatus() {
-  return { available: Boolean(findYtDlp()), path: findYtDlp() }
+  const found = findYtDlp()
+  return { available: Boolean(found || downloadedYtDlpPathPromise), path: found ?? null }
 }
