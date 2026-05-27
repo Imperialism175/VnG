@@ -1,16 +1,13 @@
 import { spawn } from 'node:child_process'
-import { mkdir, chmod } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import play from 'play-dl'
 import { YtdlCore, toPipeableStream } from '@ybd-project/ytdl-core'
-import YTDlpWrap from 'yt-dlp-wrap'
 import { parseYoutubeVideoId } from './roomExtras.js'
 
 const hubs = new Map()
 const ytdlCore = new YtdlCore({ noUpdate: true })
-let downloadedYtDlpPathPromise = null
 
 const DIRECT_AUDIO = /\.(mp3|ogg|opus|wav|m4a|aac|flac|webm)(\?|$)/i
 
@@ -33,6 +30,7 @@ function findYtDlp() {
   if (fromEnv && existsSync(fromEnv)) return fromEnv
 
   const candidates = [
+    join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'),
     'yt-dlp',
     'yt-dlp.exe',
     join(process.env.LOCALAPPDATA ?? '', 'Programs', 'yt-dlp', 'yt-dlp.exe'),
@@ -43,32 +41,6 @@ function findYtDlp() {
     if (c && (c === 'yt-dlp' || c === 'yt-dlp.exe' || existsSync(c))) return c
   }
   return null
-}
-
-async function getOrDownloadYtDlp() {
-  const found = findYtDlp()
-  if (found) return found
-  if (!downloadedYtDlpPathPromise) {
-    downloadedYtDlpPathPromise = (async () => {
-      const cacheDir = join(process.cwd(), '.cache')
-      await mkdir(cacheDir, { recursive: true })
-      const fileName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
-      const binPath = join(cacheDir, fileName)
-      if (!existsSync(binPath)) {
-        await YTDlpWrap.downloadFromGithub(binPath)
-        if (process.platform !== 'win32') {
-          await chmod(binPath, 0o755)
-        }
-      }
-      return binPath
-    })()
-  }
-  try {
-    return await downloadedYtDlpPathPromise
-  } catch {
-    downloadedYtDlpPathPromise = null
-    return null
-  }
 }
 
 class RoomMusicHub {
@@ -125,15 +97,17 @@ class RoomMusicHub {
       return
     }
 
-    const ytDlp = await getOrDownloadYtDlp()
+    const ytDlp = findYtDlp()
     if (!ytDlp) {
-      this._streamViaYtdlCore(this.sourceUrl)
+      this._failAll('yt-dlp недоступен на хосте')
       return
     }
 
     this.process = spawn(
       ytDlp,
       [
+        '--js-runtimes',
+        'node',
         '-f',
         'bestaudio[ext=m4a]/bestaudio/best',
         '--no-playlist',
@@ -304,7 +278,7 @@ export function handleMusicStreamRequest(room, req, res) {
 
 export async function fetchTitleViaYtDlp(url) {
   const normalizedUrl = normalizeYoutubeWatchUrl(url)
-  const ytDlp = await getOrDownloadYtDlp()
+  const ytDlp = findYtDlp()
   if (!ytDlp) {
     try {
       const info = await ytdlCore.getBasicInfo(normalizedUrl)
@@ -321,7 +295,7 @@ export async function fetchTitleViaYtDlp(url) {
     }
   }
   return new Promise((resolve) => {
-    const proc = spawn(ytDlp, ['--print', 'title', '--no-playlist', normalizedUrl], {
+    const proc = spawn(ytDlp, ['--js-runtimes', 'node', '--print', 'title', '--no-playlist', normalizedUrl], {
       windowsHide: true,
     })
     let out = ''
@@ -335,7 +309,7 @@ export async function fetchTitleViaYtDlp(url) {
 
 export async function fetchPlaylistEntriesViaYtDlp(url) {
   const normalizedUrl = normalizeYoutubeWatchUrl(url)
-  const ytDlp = await getOrDownloadYtDlp()
+  const ytDlp = findYtDlp()
   if (!ytDlp) {
     try {
       const playlist = await play.playlist_info(normalizedUrl, { incomplete: true })
@@ -359,7 +333,16 @@ export async function fetchPlaylistEntriesViaYtDlp(url) {
   return new Promise((resolve) => {
     const proc = spawn(
       ytDlp,
-      ['--dump-single-json', '--flat-playlist', '--playlist-end', '100', '--no-warnings', normalizedUrl],
+      [
+        '--js-runtimes',
+        'node',
+        '--dump-single-json',
+        '--flat-playlist',
+        '--playlist-end',
+        '100',
+        '--no-warnings',
+        normalizedUrl,
+      ],
       { windowsHide: true }
     )
     let out = ''
@@ -398,5 +381,5 @@ export async function fetchPlaylistEntriesViaYtDlp(url) {
 
 export function getYtDlpStatus() {
   const found = findYtDlp()
-  return { available: Boolean(found || downloadedYtDlpPathPromise), path: found ?? null }
+  return { available: Boolean(found), path: found ?? null }
 }
