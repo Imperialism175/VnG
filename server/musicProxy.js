@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import play from 'play-dl'
+import ytdl from '@distube/ytdl-core'
 import { parseYoutubeVideoId } from './roomExtras.js'
 
 const hubs = new Map()
@@ -39,7 +40,7 @@ class RoomMusicHub {
     this.clients = new Set()
     this.process = null
     this.fetchAbort = null
-    this.playDlStream = null
+    this.fallbackStream = null
     this.sourceUrl = null
     this.started = false
     this.contentType = 'audio/mp4'
@@ -89,7 +90,7 @@ class RoomMusicHub {
 
     const ytDlp = findYtDlp()
     if (!ytDlp) {
-      this._streamViaPlayDl(this.sourceUrl)
+      this._streamViaYtdlCore(this.sourceUrl)
       return
     }
 
@@ -155,25 +156,25 @@ class RoomMusicHub {
     }
   }
 
-  async _streamViaPlayDl(url) {
+  async _streamViaYtdlCore(url) {
     try {
-      const streamInfo = await play.stream(url, {
-        discordPlayerCompatibility: false,
+      const info = await ytdl.getInfo(url)
+      const audioFormat = ytdl.chooseFormat(info.formats, {
+        quality: 'highestaudio',
+        filter: 'audioonly',
       })
-      this.contentType =
-        streamInfo.type === 'webm/opus'
-          ? 'audio/webm'
-          : streamInfo.type === 'opus'
-            ? 'audio/ogg'
-            : 'audio/mpeg'
-      this.playDlStream = streamInfo.stream
-      this.playDlStream.on('data', (chunk) => this._broadcast(chunk))
-      this.playDlStream.on('end', () => {
+      this.contentType = String(audioFormat?.mimeType ?? '').includes('webm') ? 'audio/webm' : 'audio/mp4'
+      this.fallbackStream = ytdl.downloadFromInfo(info, {
+        format: audioFormat,
+        highWaterMark: 1 << 25,
+      })
+      this.fallbackStream.on('data', (chunk) => this._broadcast(chunk))
+      this.fallbackStream.on('end', () => {
         for (const res of this.clients) {
           if (!res.writableEnded) res.end()
         }
       })
-      this.playDlStream.on('error', (err) => {
+      this.fallbackStream.on('error', (err) => {
         this._failAll(err?.message ?? 'Ошибка потока YouTube')
       })
     } catch {
@@ -200,13 +201,13 @@ class RoomMusicHub {
       this.fetchAbort.abort()
       this.fetchAbort = null
     }
-    if (this.playDlStream) {
+    if (this.fallbackStream) {
       try {
-        this.playDlStream.destroy()
+        this.fallbackStream.destroy()
       } catch {
         /* ignore */
       }
-      this.playDlStream = null
+      this.fallbackStream = null
     }
     this.started = false
     this.sourceUrl = null
