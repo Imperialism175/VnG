@@ -83,6 +83,9 @@ export function GmRoomTools({
       const firstUrl = result.entries[0]?.url ?? ''
       setSelectedPlaylistTrackUrl(firstUrl)
       if (firstUrl) setMusicUrl(firstUrl)
+      if (!result.entries.length) {
+        setPlaylistError('Плейлист пустой или не удалось прочитать треки')
+      }
     } catch (err) {
       setPlaylistEntries([])
       setSelectedPlaylistTrackUrl('')

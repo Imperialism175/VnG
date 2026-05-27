@@ -38,6 +38,36 @@ function isInspirationCounter(name: string) {
   return /вдох|inspir/i.test(name)
 }
 
+function buildThresholdDisplayRows(
+  rows: Array<{ threshold: number; effect: StatEffectValue }>,
+  presetId: SheetPresetId | null
+): Array<{ threshold: number; effect: StatEffectValue }> {
+  if (!rows.length) return []
+  if (presetId === 'casual') return rows
+
+  const effectsByThreshold = new Map<number, StatEffectValue>()
+  for (const row of rows) {
+    effectsByThreshold.set(row.threshold, row.effect)
+  }
+
+  const numericThresholds = rows.map((row) => row.threshold).filter((n) => Number.isFinite(n) && n >= 1)
+  if (!numericThresholds.length) return rows
+
+  const minThreshold = Math.max(1, Math.min(...numericThresholds))
+  const maxThreshold = Math.max(...numericThresholds)
+  const result: Array<{ threshold: number; effect: StatEffectValue }> = []
+  for (let value = minThreshold; value <= maxThreshold; value++) {
+    result.push({ threshold: value, effect: effectsByThreshold.get(value) ?? 0 })
+  }
+  return result
+}
+
+function formatThresholdEffect(effect: StatEffectValue): string {
+  if (typeof effect !== 'number' || !Number.isFinite(effect)) return String(effect)
+  if (effect >= 0) return `+${effect}`
+  return String(effect)
+}
+
 function isHpStat(name: string) {
   return String(name ?? '').trim().toLowerCase() === 'хп'
 }
@@ -297,6 +327,7 @@ export function CharacterSheet({
   const templateSelected = Boolean(local.sheet_preset_id)
   const resolvedPresetId = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status)
   const thresholdRows = getThresholdEffectsForCharacter(local.sheet_preset_id ?? null, local.class_status)
+  const thresholdDisplayRows = buildThresholdDisplayRows(thresholdRows, resolvedPresetId)
   const activePresetLabel =
     SHEET_PRESETS.find((preset) => preset.id === (local.sheet_preset_id as SheetPresetId | undefined))?.label ??
     null
@@ -530,7 +561,7 @@ export function CharacterSheet({
               <div className="px-2 py-1 text-xs uppercase tracking-wide text-vng-muted border-b border-vng-border bg-vng-elevated/40">
                 Таблица модификаторов порога ({resolvedPresetId ?? 'не определен'})
               </div>
-              {thresholdRows.length > 0 ? (
+              {thresholdDisplayRows.length > 0 ? (
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-vng-muted border-b border-vng-border">
@@ -539,13 +570,13 @@ export function CharacterSheet({
                     </tr>
                   </thead>
                   <tbody>
-                    {thresholdRows.map((row) => (
+                    {thresholdDisplayRows.map((row) => (
                       <tr key={`${row.threshold}-${String(row.effect)}`} className="border-b border-vng-border/40">
                         <td className="px-2 py-1 vng-mono">
                           {row.threshold === 0 && resolvedPresetId === 'casual' ? 'Любое' : row.threshold}
                         </td>
                         <td className="px-2 py-1 vng-mono text-vng-amber">
-                          {typeof row.effect === 'number' && row.effect > 0 ? `+${row.effect}` : String(row.effect)}
+                          {formatThresholdEffect(row.effect)}
                         </td>
                       </tr>
                     ))}

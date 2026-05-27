@@ -28,6 +28,25 @@ function normalizeYoutubeWatchUrl(url) {
   return raw
 }
 
+function normalizeYoutubePlaylistUrl(url) {
+  const raw = String(url ?? '').trim()
+  if (!raw) return ''
+  try {
+    const u = new URL(raw)
+    const host = u.hostname.replace(/^www\./, '')
+    if (host === 'music.youtube.com' || host === 'm.youtube.com') {
+      u.hostname = 'www.youtube.com'
+    }
+    const list = String(u.searchParams.get('list') ?? '').trim()
+    if (list) {
+      return `https://www.youtube.com/playlist?list=${encodeURIComponent(list)}`
+    }
+  } catch {
+    /* ignore */
+  }
+  return raw
+}
+
 function findYtDlp() {
   const fromEnv = process.env.YT_DLP_PATH
   if (fromEnv && existsSync(fromEnv)) return fromEnv
@@ -336,7 +355,7 @@ export async function fetchTitleViaYtDlp(url) {
 }
 
 export async function fetchPlaylistEntriesViaYtDlp(url) {
-  const normalizedUrl = normalizeYoutubeWatchUrl(url)
+  const normalizedUrl = normalizeYoutubePlaylistUrl(url)
   const ytDlp = await getOrDownloadYtDlp()
   if (!ytDlp) {
     try {

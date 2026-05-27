@@ -113,6 +113,40 @@ function broadcastState(room) {
   broadcast(room, { type: 'STATE_SYNC', state: getPublicState(room) })
 }
 
+function hasActiveConnectionForPlayer(room, playerId) {
+  for (const client of room.clients) {
+    if (client.readyState !== 1) continue
+    if (client.playerId === playerId) return true
+  }
+  return false
+}
+
+function removePlayerFromRoom(room, playerId) {
+  const player = room.players.get(playerId)
+  if (!player || player.is_gm) return false
+
+  room.players.delete(playerId)
+  room.characters.delete(playerId)
+  clearPlayerPresence(room, playerId)
+  room.diceAllowed?.delete?.(playerId)
+  room.lastDiceRollAt?.delete?.(playerId)
+
+  if (room.playerThemes && typeof room.playerThemes === 'object') {
+    delete room.playerThemes[playerId]
+  }
+  if (room.activePoll?.votes && typeof room.activePoll.votes === 'object') {
+    delete room.activePoll.votes[playerId]
+  }
+  if (room.stageFx && Array.isArray(room.stageFx.flashlightsEnabledFor)) {
+    room.stageFx.flashlightsEnabledFor = room.stageFx.flashlightsEnabledFor.filter((id) => id !== playerId)
+  }
+  if (room.screenMessage?.target_player_id === playerId) {
+    room.screenMessage = null
+  }
+
+  return true
+}
+
 function send(ws, payload) {
   if (ws.readyState === 1) ws.send(JSON.stringify(payload))
 }
@@ -524,6 +558,7 @@ wss.on('connection', (ws, req) => {
   }
 
   room.clients.add(ws)
+  ws.playerId = playerId
   send(ws, { type: 'STATE_SYNC', state: getPublicState(room), your_gm: player.is_gm })
   broadcastState(room)
 
@@ -1080,7 +1115,12 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     room.clients.delete(ws)
     clearPlayerPresence(room, playerId)
-    broadcastPresence(room, broadcast)
+    const removed = !hasActiveConnectionForPlayer(room, playerId) && removePlayerFromRoom(room, playerId)
+    if (removed) {
+      broadcastState(room)
+    } else {
+      broadcastPresence(room, broadcast)
+    }
     if (room.clients.size === 0) {
       stopRoomMusic(room.id)
       clearPollAutoClose(room.id)
