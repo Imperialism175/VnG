@@ -201,9 +201,9 @@ export function GmRoomTools({
           </p>
         )}
         <p className="text-xs text-vng-muted">
-          Звук идёт через <strong className="text-vng-amber">сервер хоста</strong> — игрокам YouTube не нужен.
-          Громкость каждый настраивает у себя на полоске «Сейчас играет».
-          YouTube: на хосте нужен{' '}
+          YouTube теперь запускается у игроков напрямую (embed), чтобы не зависеть от потока хоста.
+          Прямые аудиофайлы (.mp3/.ogg) всё ещё идут через <strong className="text-vng-amber">сервер хоста</strong>.
+          Для host-proxy YouTube на хосте нужен{' '}
           <a
             className="text-vng-blue underline"
             href="https://github.com/yt-dlp/yt-dlp/releases"

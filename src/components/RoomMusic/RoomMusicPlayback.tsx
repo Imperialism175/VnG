@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RoomMusic } from '@/types'
 import { MusicVolumeControl } from '@/components/RoomMusic/MusicVolumeControl'
 import { getMusicStreamUrl } from '@/lib/runtime'
+import { youtubeEmbedUrl } from '@/lib/youtube'
 
 const VOLUME_STORAGE_KEY = 'vng_local_music_volume'
 
@@ -37,6 +38,10 @@ export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
     if (!music.playing || !music.stream_token || !music.use_host_proxy) return null
     return getMusicStreamUrl(roomId, music.stream_token)
   }, [roomId, music.playing, music.stream_token, music.use_host_proxy])
+  const youtubeEmbedSrc = useMemo(() => {
+    if (!music.playing || music.use_host_proxy || music.source !== 'youtube' || !music.video_id) return null
+    return youtubeEmbedUrl(music.video_id, true)
+  }, [music.playing, music.use_host_proxy, music.source, music.video_id])
 
   useEffect(() => {
     const el = audioRef.current
@@ -110,10 +115,23 @@ export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
   const showBar = Boolean(music.playing && music.url)
   const displayTitle = music.title?.trim() || 'Музыка'
   const proxyHint = music.proxy_error
+  const isHostStreamMode = Boolean(streamUrl)
+  const sourceLabel = isHostStreamMode ? '· с сервера хоста' : '· YouTube direct'
 
   return (
     <>
       <audio ref={audioRef} loop preload="auto" className="hidden" aria-hidden />
+      {youtubeEmbedSrc && (
+        <iframe
+          key={youtubeEmbedSrc}
+          src={youtubeEmbedSrc}
+          title="Room music player"
+          allow="autoplay; encrypted-media"
+          className="absolute w-px h-px opacity-0 pointer-events-none"
+          tabIndex={-1}
+          aria-hidden
+        />
+      )}
 
       {proxyHint && (
         <div className="shrink-0 px-2 py-1 border-b border-vng-border text-xs text-center max-w-[1600px] mx-auto uppercase">
@@ -127,15 +145,25 @@ export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
             <span className="text-vng-muted shrink-0">AUDIO:</span>
             <p className="min-w-0 flex-1 truncate">
               <span className="text-vng-text">{displayTitle}</span>
-              <span className="text-xs text-vng-muted ml-1.5 hidden sm:inline">· с сервера хоста</span>
+              <span className="text-xs text-vng-muted ml-1.5 hidden sm:inline">{sourceLabel}</span>
             </p>
-            <MusicVolumeControl volume={localVolume} onChange={handleVolumeChange} compact />
-            {needsUnlock && !streamError && (
+            {isHostStreamMode && <MusicVolumeControl volume={localVolume} onChange={handleVolumeChange} compact />}
+            {isHostStreamMode && needsUnlock && !streamError && (
               <button type="button" onClick={() => tryPlay()} className="vng-tui-btn shrink-0 text-xs">
                 SOUND ON
               </button>
             )}
-            {streamError && (
+            {!isHostStreamMode && music.url && (
+              <a
+                href={music.url}
+                target="_blank"
+                rel="noreferrer"
+                className="vng-tui-btn shrink-0 text-xs"
+              >
+                OPEN
+              </a>
+            )}
+            {isHostStreamMode && streamError && (
               <span className="text-xs text-vng-danger shrink-0">Ошибка потока с хоста</span>
             )}
           </div>

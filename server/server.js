@@ -960,6 +960,25 @@ wss.on('connection', (ws, req) => {
           }
         }
 
+        // YouTube plays directly in clients via embed mode.
+        // This avoids host-side stream extraction failures on restricted hosts.
+        if (source === 'youtube' && videoId) {
+          stopRoomMusic(room.id)
+          room.music = {
+            url,
+            video_id: videoId,
+            playing: true,
+            title: title ?? 'Трек',
+            volume: clampMusicVolume(msg.volume, room.music?.volume ?? 70),
+            source,
+            stream_token: null,
+            use_host_proxy: false,
+            proxy_error: null,
+          }
+          broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
+          return
+        }
+
         const prep = prepareRoomMusicStream(room, url)
         if (!prep.ok) {
           stopRoomMusic(room.id)
