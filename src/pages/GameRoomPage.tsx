@@ -24,7 +24,7 @@ import { RoomHud } from '@/components/RoomHud/RoomHud'
 import { ThemeColorEditor } from '@/components/RoomTheme/ThemeColorEditor'
 import { getRoomSessionStartMs } from '@/lib/sessionTime'
 import { getLevelPreset } from '@/lib/levels'
-import { getStatEffectForCharacterSheet } from '@/lib/characterSheets'
+import { getStatEffectForCharacterSheet, resolveCharacterPresetId } from '@/lib/characterSheets'
 
 const MOBILE_UI_SCALE_KEY = 'vng_mobile_ui_scale'
 
@@ -270,6 +270,8 @@ function GameRoomContent() {
       })
     ),
     inspirationPoints: myCharacter?.counters.find((c) => /вдох|inspir/i.test(c.name))?.current ?? 0,
+    wandererMode:
+      resolveCharacterPresetId(myCharacter?.sheet_preset_id ?? null, myCharacter?.class_status ?? '') === 'wanderer',
     onReroll: session.isGm
       ? undefined
       : (opts: { count: number; sides: number; modifier: number }) => {

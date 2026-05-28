@@ -29,7 +29,7 @@ export function DiceThrowPit({ sides, values, rolling, tumbleTick, modifier, tot
       {hasDice &&
         values.map((value, i) => (
           <div
-            key={`die-${i}-${value}`}
+            key={`die-${i}`}
             className={`vng-die-visual ${rolling ? 'vng-die-visual--rolling' : ''}`}
             style={rolling ? rollingStyle(i, values.length) : settleStyle(i, values.length)}
           >

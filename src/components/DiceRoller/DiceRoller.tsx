@@ -27,6 +27,7 @@ interface DiceRollerProps {
   cooldownSec?: number
   isGm?: boolean
   inspirationPoints?: number
+  wandererMode?: boolean
 }
 
 interface RollDisplay {
@@ -64,6 +65,7 @@ export function DiceRoller({
   cooldownSec = 0,
   isGm = false,
   inspirationPoints = 0,
+  wandererMode = false,
 }: DiceRollerProps) {
   const [selectedSides, setSelectedSides] = useState<DiceSides>(20)
   const [diceCount, setDiceCount] = useState(1)
@@ -86,9 +88,6 @@ export function DiceRoller({
     const mine = rollEvents.filter((e) => e.player_id === playerId)
     const latest = mine[mine.length - 1]
     if (!latest || latest.id === lastShownRollId.current) return
-
-    const at = new Date(latest.created_at).getTime()
-    if (at < rollStartedAt.current - 200) return
 
     const nextDisplay = toRollDisplay(latest, selectedSides)
     if (!nextDisplay) return
@@ -176,6 +175,10 @@ export function DiceRoller({
   const pitValues = rolling ? tumbleValues : display?.values ?? []
   const mod = display?.modifier ?? (scaleStatValue ?? 0)
   const total = display?.total
+  const readoutExpression =
+    selectedSides === 20 && wandererMode
+      ? `${diceCount} × (d5 + d12)`
+      : `${diceCount}d${selectedSides}`
 
   useEffect(() => {
     if (!scaleStatName) {
@@ -208,6 +211,7 @@ export function DiceRoller({
           <div className="grid grid-cols-4 gap-2">
             {DICE_TYPES.map(({ label, sides }) => {
               const active = selectedSides === sides
+              const renderedLabel = sides === 20 && wandererMode ? 'Д5 + Д12' : label
               return (
                 <button
                   key={sides}
@@ -220,7 +224,7 @@ export function DiceRoller({
                 >
                   <DiceIcon sides={sides} size={20} />
                   <span className="text-sm font-bold tracking-wide uppercase">
-                    {active ? `► ${label} ◄` : label}
+                    {active ? `► ${renderedLabel} ◄` : renderedLabel}
                   </span>
                 </button>
               )
@@ -285,7 +289,7 @@ export function DiceRoller({
         </div>
 
         <p className="vng-dice-readout text-center vng-mono text-sm text-vng-muted py-2">
-          <span className="text-vng-blue">{diceCount}d{selectedSides}</span>
+          <span className="text-vng-blue">{readoutExpression}</span>
           {(scaleStatValue ?? 0) !== 0 && (
             <span className="text-vng-amber">
               {(scaleStatValue ?? 0) > 0 ? ` + ${scaleStatValue}` : ` − ${Math.abs(scaleStatValue ?? 0)}`}
