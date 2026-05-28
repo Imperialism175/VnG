@@ -1,16 +1,7 @@
-import { spawn } from 'node:child_process'
-import { mkdir, chmod } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import play from 'play-dl'
-import { YtdlCore, toPipeableStream } from '@ybd-project/ytdl-core'
-import YTDlpWrap from 'yt-dlp-wrap'
 import { parseYoutubeVideoId } from './roomExtras.js'
 
 const hubs = new Map()
-const ytdlCore = new YtdlCore({ noUpdate: true })
-let downloadedYtDlpPathPromise = null
 
 const DIRECT_AUDIO = /\.(mp3|ogg|opus|wav|m4a|aac|flac|webm)(\?|$)/i
 
@@ -19,13 +10,6 @@ export function detectMusicSource(url) {
   if (DIRECT_AUDIO.test(url) || url.includes('/audio/')) return 'direct'
   if (parseYoutubeVideoId(url)) return 'youtube'
   return null
-}
-
-function normalizeYoutubeWatchUrl(url) {
-  const raw = String(url ?? '').trim()
-  const id = parseYoutubeVideoId(raw)
-  if (id) return `https://www.youtube.com/watch?v=${id}`
-  return raw
 }
 
 function normalizeYoutubePlaylistUrl(url) {
@@ -47,46 +31,16 @@ function normalizeYoutubePlaylistUrl(url) {
   return raw
 }
 
-function findYtDlp() {
-  const fromEnv = process.env.YT_DLP_PATH
-  if (fromEnv && existsSync(fromEnv)) return fromEnv
-
-  const candidates = [
-    'yt-dlp',
-    'yt-dlp.exe',
-    join(process.env.LOCALAPPDATA ?? '', 'Programs', 'yt-dlp', 'yt-dlp.exe'),
-    'C:\\Program Files\\yt-dlp\\yt-dlp.exe',
-    join(process.env.USERPROFILE ?? '', 'scoop', 'shims', 'yt-dlp.exe'),
-  ]
-  for (const c of candidates) {
-    if (c && (c === 'yt-dlp' || c === 'yt-dlp.exe' || existsSync(c))) return c
-  }
-  return null
-}
-
-async function getOrDownloadYtDlp() {
-  const found = findYtDlp()
-  if (found) return found
-  if (!downloadedYtDlpPathPromise) {
-    downloadedYtDlpPathPromise = (async () => {
-      const cacheDir = join(process.cwd(), '.cache')
-      await mkdir(cacheDir, { recursive: true })
-      const fileName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
-      const binPath = join(cacheDir, fileName)
-      if (!existsSync(binPath)) {
-        await YTDlpWrap.downloadFromGithub(binPath)
-        if (process.platform !== 'win32') {
-          await chmod(binPath, 0o755)
-        }
-      }
-      return binPath
-    })()
-  }
+function parseYoutubePlaylistId(url) {
+  const normalized = normalizeYoutubePlaylistUrl(url)
+  if (!normalized) return null
   try {
-    return await downloadedYtDlpPathPromise
+    const u = new URL(normalized)
+    const list = String(u.searchParams.get('list') ?? '').trim()
+    return list || null
   } catch {
-    downloadedYtDlpPathPromise = null
-    return null
+    const m = normalized.match(/[?&]list=([a-zA-Z0-9_-]+)/)
+    return m?.[1] ?? null
   }
 }
 
@@ -94,12 +48,10 @@ class RoomMusicHub {
   constructor(roomId) {
     this.roomId = roomId
     this.clients = new Set()
-    this.process = null
     this.fetchAbort = null
-    this.fallbackStream = null
     this.sourceUrl = null
     this.started = false
-    this.contentType = 'audio/mp4'
+    this.contentType = 'audio/mpeg'
   }
 
   attach(res) {
@@ -112,7 +64,7 @@ class RoomMusicHub {
   }
 
   start(url, source) {
-    this.sourceUrl = source === 'youtube' ? normalizeYoutubeWatchUrl(url) : url
+    this.sourceUrl = url
     this.source = source
     if (this.clients.size > 0) void this._startPipeline()
   }
@@ -139,46 +91,11 @@ class RoomMusicHub {
     if (this.started || !this.sourceUrl) return
     this.started = true
 
-    if (this.source === 'direct') {
-      this._streamDirect(this.sourceUrl)
+    if (this.source !== 'direct') {
+      this._failAll('Прокси сервера поддерживает только прямые аудиофайлы')
       return
     }
-
-    const ytDlp = await getOrDownloadYtDlp()
-    if (!ytDlp) {
-      this._streamViaYtdlCore(this.sourceUrl)
-      return
-    }
-
-    this.process = spawn(
-      ytDlp,
-      [
-        '--js-runtimes',
-        'node',
-        '-f',
-        'bestaudio[ext=m4a]/bestaudio/best',
-        '--no-playlist',
-        '--no-warnings',
-        '-o',
-        '-',
-        this.sourceUrl,
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
-    )
-
-    this.process.stdout.on('data', (chunk) => this._broadcast(chunk))
-    this.process.stderr.on('data', () => {})
-    this.process.on('error', (err) => {
-      this._failAll(err.message ?? 'yt-dlp error')
-    })
-    this.process.on('close', (code) => {
-      if (code !== 0 && code !== null) {
-        this._failAll('Не удалось получить аудио с YouTube на хосте')
-      }
-      for (const res of this.clients) {
-        if (!res.writableEnded) res.end()
-      }
-    })
+    this._streamDirect(this.sourceUrl)
   }
 
   async _streamDirect(url) {
@@ -214,35 +131,6 @@ class RoomMusicHub {
     }
   }
 
-  async _streamViaYtdlCore(url) {
-    try {
-      const info = await ytdlCore.getBasicInfo(url, {
-        quality: 'highestaudio',
-        filter: 'audioonly',
-      })
-      const audioFormats = YtdlCore.filterFormats(info.formats, 'audioonly')
-      const best = audioFormats[0]
-      this.contentType = String(best?.mimeType ?? '').includes('webm') ? 'audio/webm' : 'audio/mp4'
-      const webStream = await ytdlCore.download(url, {
-        quality: 'highestaudio',
-        filter: 'audioonly',
-        highWaterMark: 1 << 25,
-      })
-      this.fallbackStream = toPipeableStream(webStream)
-      this.fallbackStream.on('data', (chunk) => this._broadcast(chunk))
-      this.fallbackStream.on('end', () => {
-        for (const res of this.clients) {
-          if (!res.writableEnded) res.end()
-        }
-      })
-      this.fallbackStream.on('error', (err) => {
-        this._failAll(err?.message ?? 'Ошибка потока YouTube')
-      })
-    } catch {
-      this._failAll('Не удалось получить аудио с YouTube на сервере')
-    }
-  }
-
   _failAll(message) {
     for (const res of this.clients) {
       if (!res.writableEnded) {
@@ -254,25 +142,13 @@ class RoomMusicHub {
   }
 
   stop() {
-    if (this.process) {
-      this.process.kill('SIGTERM')
-      this.process = null
-    }
     if (this.fetchAbort) {
       this.fetchAbort.abort()
       this.fetchAbort = null
     }
-    if (this.fallbackStream) {
-      try {
-        this.fallbackStream.destroy()
-      } catch {
-        /* ignore */
-      }
-      this.fallbackStream = null
-    }
     this.started = false
     this.sourceUrl = null
-    this.contentType = 'audio/mp4'
+    this.contentType = 'audio/mpeg'
   }
 }
 
@@ -292,6 +168,7 @@ export function stopRoomMusic(roomId) {
 export function prepareRoomMusicStream(room, url) {
   const source = detectMusicSource(url)
   if (!source) return { ok: false, error: 'Неподдерживаемая ссылка' }
+  if (source !== 'direct') return { ok: false, error: 'YouTube не проксируется сервером (воспроизводится напрямую)' }
 
   stopRoomMusic(room.id)
   const streamToken = randomUUID()
@@ -323,110 +200,54 @@ export function handleMusicStreamRequest(room, req, res) {
   hub.attach(res)
 }
 
-export async function fetchTitleViaYtDlp(url) {
-  const normalizedUrl = normalizeYoutubeWatchUrl(url)
-  const ytDlp = await getOrDownloadYtDlp()
-  if (!ytDlp) {
-    try {
-      const info = await ytdlCore.getBasicInfo(normalizedUrl)
-      const title = String(info?.videoDetails?.title ?? '').trim()
-      return title ? title.slice(0, 200) : null
-    } catch {
-      try {
-        const info = await play.video_basic_info(normalizedUrl)
-        const title = String(info?.video_details?.title ?? '').trim()
-        return title ? title.slice(0, 200) : null
-      } catch {
-        return null
-      }
-    }
+export async function fetchMusicTitle(url) {
+  const raw = String(url ?? '').trim()
+  if (!raw) return null
+  try {
+    const u = new URL(raw)
+    const pathTail = u.pathname.split('/').filter(Boolean).pop() ?? 'Аудио'
+    return decodeURIComponent(pathTail).slice(0, 200)
+  } catch {
+    return 'Музыка'
   }
-  return new Promise((resolve) => {
-    const proc = spawn(ytDlp, ['--js-runtimes', 'node', '--print', 'title', '--no-playlist', normalizedUrl], {
-      windowsHide: true,
-    })
-    let out = ''
-    proc.stdout.on('data', (d) => (out += d.toString()))
-    proc.on('close', (code) => {
-      resolve(code === 0 && out.trim() ? out.trim().slice(0, 200) : null)
-    })
-    proc.on('error', () => resolve(null))
-  })
 }
 
-export async function fetchPlaylistEntriesViaYtDlp(url) {
-  const normalizedUrl = normalizeYoutubePlaylistUrl(url)
-  const ytDlp = await getOrDownloadYtDlp()
-  if (!ytDlp) {
-    try {
-      const playlist = await play.playlist_info(normalizedUrl, { incomplete: true })
-      const videos = await playlist.all_videos()
-      const entries = videos
-        .slice(0, 100)
-        .map((item, idx) => ({
-          id: String(item?.id ?? `${idx + 1}`),
-          title:
-            String(item?.title ?? `Трек ${idx + 1}`)
-              .trim()
-              .slice(0, 200) || `Трек ${idx + 1}`,
-          url: String(item?.url ?? (item?.id ? `https://www.youtube.com/watch?v=${item.id}` : '')),
-        }))
-        .filter((e) => /^https?:\/\//i.test(e.url))
-      return { error: null, entries }
-    } catch {
-      return { error: 'Не удалось прочитать плейлист (fallback)', entries: [] }
-    }
+export async function fetchPlaylistEntries(url) {
+  const playlistId = parseYoutubePlaylistId(url)
+  if (!playlistId) return { error: 'Нужна корректная ссылка на YouTube playlist', entries: [] }
+  try {
+    const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`
+    const res = await fetch(feedUrl, { headers: { 'User-Agent': 'VnG/1.0' } })
+    if (!res.ok) return { error: `Не удалось загрузить плейлист (HTTP ${res.status})`, entries: [] }
+    const xml = await res.text()
+    const entryBlocks = xml.match(/<entry>[\s\S]*?<\/entry>/g) ?? []
+    const entries = entryBlocks
+      .slice(0, 100)
+      .map((block, idx) => {
+        const idMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)
+        const titleMatch = block.match(/<title>([\s\S]*?)<\/title>/)
+        const videoId = String(idMatch?.[1] ?? '').trim()
+        if (!videoId) return null
+        const titleRaw = String(titleMatch?.[1] ?? `Трек ${idx + 1}`)
+        const title = titleRaw
+          .replace(/&amp;/g, '&')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .trim()
+          .slice(0, 200)
+        return {
+          id: videoId,
+          title: title || `Трек ${idx + 1}`,
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+        }
+      })
+      .filter(Boolean)
+    if (!entries.length) return { error: 'Плейлист пустой или закрыт', entries: [] }
+    return { error: null, entries }
+  } catch {
+    return { error: 'Не удалось прочитать YouTube плейлист', entries: [] }
   }
-  return new Promise((resolve) => {
-    const proc = spawn(
-      ytDlp,
-      [
-        '--js-runtimes',
-        'node',
-        '--dump-single-json',
-        '--flat-playlist',
-        '--playlist-end',
-        '100',
-        '--no-warnings',
-        normalizedUrl,
-      ],
-      { windowsHide: true }
-    )
-    let out = ''
-    let err = ''
-    proc.stdout.on('data', (d) => (out += d.toString()))
-    proc.stderr.on('data', (d) => (err += d.toString()))
-    proc.on('close', () => {
-      try {
-        const payload = JSON.parse(out || '{}')
-        const sourceEntries = Array.isArray(payload?.entries) ? payload.entries : []
-        const entries = sourceEntries
-          .map((item, idx) => {
-            const id = String(item?.id ?? '').trim()
-            const directUrl = typeof item?.url === 'string' && /^https?:\/\//i.test(item.url) ? item.url.trim() : null
-            const watchUrl =
-              id && (payload?.extractor_key === 'YoutubeTab' || payload?.extractor === 'youtube:tab')
-                ? `https://www.youtube.com/watch?v=${id}`
-                : null
-            const finalUrl = directUrl ?? watchUrl
-            if (!finalUrl) return null
-            return {
-              id: id || `${idx + 1}`,
-              title: String(item?.title ?? `Трек ${idx + 1}`).trim().slice(0, 200) || `Трек ${idx + 1}`,
-              url: finalUrl,
-            }
-          })
-          .filter(Boolean)
-        resolve({ error: null, entries })
-      } catch {
-        resolve({ error: err.trim() || 'Не удалось прочитать плейлист', entries: [] })
-      }
-    })
-    proc.on('error', () => resolve({ error: 'Ошибка запуска yt-dlp', entries: [] }))
-  })
 }
 
-export function getYtDlpStatus() {
-  const found = findYtDlp()
-  return { available: Boolean(found || downloadedYtDlpPathPromise), path: found ?? null }
-}

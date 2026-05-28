@@ -20,16 +20,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@distube/ytdl-core": "^4.16.12",
     "@supabase/supabase-js": "^2.49.1",
-    "@ybd-project/ytdl-core": "^6.0.8",
     "lucide-react": "^0.475.0",
-    "play-dl": "^1.9.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.2.0",
-    "ws": "^8.18.1",
-    "yt-dlp-wrap": "^2.3.12"
+    "ws": "^8.18.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

@@ -221,16 +221,7 @@ export function GmRoomTools({
         <p className="text-xs text-vng-muted">
           YouTube теперь запускается у игроков напрямую (embed), чтобы не зависеть от потока хоста.
           Прямые аудиофайлы (.mp3/.ogg) всё ещё идут через <strong className="text-vng-amber">сервер хоста</strong>.
-          Для host-proxy YouTube на хосте нужен{' '}
-          <a
-            className="text-vng-blue underline"
-            href="https://github.com/yt-dlp/yt-dlp/releases"
-            target="_blank"
-            rel="noreferrer"
-          >
-            yt-dlp
-          </a>
-          . Или вставьте прямую ссылку на .mp3 / .ogg.
+          Для стабильности используйте YouTube ссылки или прямую ссылку на .mp3 / .ogg.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button

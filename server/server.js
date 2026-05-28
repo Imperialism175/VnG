@@ -19,12 +19,11 @@ import {
 } from './roomExtras.js'
 import {
   detectMusicSource,
-  fetchTitleViaYtDlp,
-  fetchPlaylistEntriesViaYtDlp,
+  fetchMusicTitle,
+  fetchPlaylistEntries,
   handleMusicStreamRequest,
   prepareRoomMusicStream,
   stopRoomMusic,
-  getYtDlpStatus,
 } from './musicProxy.js'
 import { applyPlayerCounterPolicy } from './characterHp.js'
 import {
@@ -412,7 +411,7 @@ const httpServer = createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/server/info') {
-      json(200, { port: SERVER_PORT, addresses: getLanAddresses(), music: getYtDlpStatus() })
+      json(200, { port: SERVER_PORT, addresses: getLanAddresses(), music: { mode: 'youtube-direct' } })
       return
     }
 
@@ -422,7 +421,7 @@ const httpServer = createServer(async (req, res) => {
         json(400, { error: 'Нужна ссылка на плейлист' })
         return
       }
-      const result = await fetchPlaylistEntriesViaYtDlp(playlistUrl)
+      const result = await fetchPlaylistEntries(playlistUrl)
       if (result.error) {
         json(400, { error: result.error, entries: [] })
         return
@@ -988,12 +987,11 @@ wss.on('connection', (ws, req) => {
           if (source === 'youtube' && videoId) {
             title =
               (await fetchYoutubeTitle(videoId)) ??
-              (await fetchTitleViaYtDlp(url)) ??
               'Трек'
           } else if (source === 'direct') {
-            title = 'Аудиофайл'
+            title = (await fetchMusicTitle(url)) ?? 'Аудиофайл'
           } else {
-            title = (await fetchTitleViaYtDlp(url)) ?? 'Музыка'
+            title = 'Музыка'
           }
         }
 
