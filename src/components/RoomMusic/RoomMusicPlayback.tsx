@@ -9,6 +9,7 @@ const VOLUME_STORAGE_KEY = 'vng_local_music_volume'
 interface RoomMusicPlaybackProps {
   roomId: string
   music: RoomMusic
+  showEqualizer?: boolean
 }
 
 function clampVolume(v: number) {
@@ -28,7 +29,7 @@ function readStoredVolume(): number {
 /**
  * Музыка через прокси сервера хоста. Громкость — только локально у каждого игрока.
  */
-export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
+export function RoomMusicPlayback({ roomId, music, showEqualizer = true }: RoomMusicPlaybackProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const youtubeFrameRef = useRef<HTMLIFrameElement>(null)
   const [needsUnlock, setNeedsUnlock] = useState(false)
@@ -144,6 +145,7 @@ export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
   const proxyHint = music.proxy_error
   const isHostStreamMode = Boolean(streamUrl)
   const sourceLabel = isHostStreamMode ? '· с сервера хоста' : '· YouTube direct'
+  const equalizerBars = useMemo(() => Array.from({ length: 12 }, (_, idx) => idx), [])
 
   return (
     <>
@@ -176,6 +178,17 @@ export function RoomMusicPlayback({ roomId, music }: RoomMusicPlaybackProps) {
               <span className="text-vng-text">{displayTitle}</span>
               <span className="text-xs text-vng-muted ml-1.5 hidden sm:inline">{sourceLabel}</span>
             </p>
+            {showEqualizer && (
+              <div className="vng-music-eq" aria-hidden>
+                {equalizerBars.map((idx) => (
+                  <span
+                    key={idx}
+                    className={`vng-music-eq__bar ${music.playing ? 'vng-music-eq__bar--active' : ''}`}
+                    style={{ animationDelay: `${idx * 80}ms` }}
+                  />
+                ))}
+              </div>
+            )}
             <MusicVolumeControl volume={localVolume} onChange={handleVolumeChange} compact />
             {isHostStreamMode && needsUnlock && !streamError && (
               <button type="button" onClick={() => tryPlay()} className="vng-tui-btn shrink-0 text-xs">

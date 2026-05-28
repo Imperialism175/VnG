@@ -102,6 +102,7 @@ function GameRoomContent() {
     setMusic, startPoll, castVote, endPoll, clearPoll,
     showScreenMessage, dismissScreenMessage, setHallOfFame,
     setStageFx, setPlayerFlashlight,
+    patchStageFx,
     presence, canRollDice, diceCooldownSec, setHandRaised, pingPlayer,
   } = useRoom()
 
@@ -397,6 +398,7 @@ function GameRoomContent() {
     <RoomThemeApplier
       theme={myTheme}
       stageFx={stageFx}
+      musicPlaying={Boolean(music.playing && music.url)}
       viewerPlayerId={session.playerId}
       viewerIsGm={session.isGm}
       mobileUiScale={mobileUiScale}
@@ -443,7 +445,7 @@ function GameRoomContent() {
         </div>
       )}
 
-      <RoomMusicPlayback roomId={room?.id ?? ''} music={music} />
+      <RoomMusicPlayback roomId={room?.id ?? ''} music={music} showEqualizer={stageFx.equalizerEnabled !== false} />
 
       <div
         className="lg:hidden shrink-0 max-w-[1600px] w-full mx-auto px-2 sm:px-3 pb-2 overflow-x-hidden"
@@ -514,6 +516,11 @@ function GameRoomContent() {
                       hasScreenMessage={Boolean(screenMessage)}
                       stageDarkness={stageFx.darkness}
                       onSetStageDarkness={setStageFx}
+                      stageEqualizerEnabled={stageFx.equalizerEnabled !== false}
+                      stageBeatFlickerEnabled={Boolean(stageFx.beatFlickerEnabled)}
+                      stageBeatBpm={stageFx.beatBpm ?? 120}
+                      stageBeatIntensity={stageFx.beatIntensity ?? 40}
+                      onPatchStageFx={patchStageFx}
                       flashlightsEnabledFor={stageFx.flashlightsEnabledFor}
                       onSetPlayerFlashlight={setPlayerFlashlight}
                       allowPlayerThemeEditing={allowPlayerThemeEditing}

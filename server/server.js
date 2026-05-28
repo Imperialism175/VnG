@@ -1102,14 +1102,25 @@ wss.on('connection', (ws, req) => {
     }
 
     if (msg.type === 'SET_STAGE_FX' && player.is_gm) {
+      const prev = room.stageFx ?? createRoomExtras().stageFx
       const raw = Number(msg.darkness)
-      const darkness = Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw))) : 100
+      const darkness = Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw))) : prev.darkness
       const allowed = Array.isArray(msg.flashlights_enabled_for)
         ? msg.flashlights_enabled_for
             .map((id) => String(id))
             .filter((id) => room.players.has(id) && !room.players.get(id)?.is_gm)
-        : (room.stageFx?.flashlightsEnabledFor ?? [])
-      room.stageFx = { darkness, flashlightsEnabledFor: allowed }
+        : (prev.flashlightsEnabledFor ?? [])
+      const equalizerEnabled =
+        typeof msg.equalizer_enabled === 'boolean' ? msg.equalizer_enabled : prev.equalizerEnabled !== false
+      const beatFlickerEnabled =
+        typeof msg.beat_flicker_enabled === 'boolean' ? msg.beat_flicker_enabled : Boolean(prev.beatFlickerEnabled)
+      const beatBpmRaw = Number(msg.beat_bpm)
+      const beatIntensityRaw = Number(msg.beat_intensity)
+      const beatBpm = Number.isFinite(beatBpmRaw) ? Math.max(50, Math.min(220, Math.round(beatBpmRaw))) : (prev.beatBpm ?? 120)
+      const beatIntensity = Number.isFinite(beatIntensityRaw)
+        ? Math.max(0, Math.min(100, Math.round(beatIntensityRaw)))
+        : (prev.beatIntensity ?? 40)
+      room.stageFx = { darkness, flashlightsEnabledFor: allowed, equalizerEnabled, beatFlickerEnabled, beatBpm, beatIntensity }
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
   })

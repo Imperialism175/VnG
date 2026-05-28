@@ -23,7 +23,7 @@ export const EMPTY_EXTRAS: RoomExtrasState = {
   activePoll: null,
   screenMessage: null,
   hallOfFame: { title: 'ЗАЛ СЛАВЫ', entries: [] },
-  stageFx: { darkness: 100, flashlightsEnabledFor: [] },
+  stageFx: { darkness: 100, flashlightsEnabledFor: [], equalizerEnabled: true, beatFlickerEnabled: false, beatBpm: 120, beatIntensity: 40 },
   allowPlayerThemeEditing: true,
   levelId: null,
   levelVariant: 'main',
@@ -102,6 +102,9 @@ export function parseRoomExtras(state: Record<string, unknown>): RoomExtrasState
   for (const [pid, t] of Object.entries(rawPt)) {
     playerThemes[pid] = normalizeTheme(t)
   }
+  const rawStageFx = (state.stage_fx as Record<string, unknown> | undefined) ?? {}
+  const beatBpmRaw = Number(rawStageFx.beatBpm ?? rawStageFx.beat_bpm)
+  const beatIntensityRaw = Number(rawStageFx.beatIntensity ?? rawStageFx.beat_intensity)
   return {
     roomTheme: normalizeTheme(state.room_theme ?? state.roomTheme),
     playerThemes,
@@ -114,14 +117,18 @@ export function parseRoomExtras(state: Record<string, unknown>): RoomExtrasState
         0,
         Math.min(
           100,
-          Number.isFinite(Number((state.stage_fx as Record<string, unknown> | undefined)?.darkness))
-            ? Math.round(Number((state.stage_fx as Record<string, unknown> | undefined)?.darkness))
+          Number.isFinite(Number(rawStageFx.darkness))
+            ? Math.round(Number(rawStageFx.darkness))
             : 100
         )
       ),
-      flashlightsEnabledFor: Array.isArray((state.stage_fx as Record<string, unknown> | undefined)?.flashlightsEnabledFor)
-        ? ((state.stage_fx as Record<string, unknown>).flashlightsEnabledFor as unknown[]).map((v) => String(v))
+      flashlightsEnabledFor: Array.isArray(rawStageFx.flashlightsEnabledFor ?? rawStageFx.flashlights_enabled_for)
+        ? ((rawStageFx.flashlightsEnabledFor ?? rawStageFx.flashlights_enabled_for) as unknown[]).map((v) => String(v))
         : [],
+      equalizerEnabled: rawStageFx.equalizerEnabled !== false && rawStageFx.equalizer_enabled !== false,
+      beatFlickerEnabled: rawStageFx.beatFlickerEnabled === true || rawStageFx.beat_flicker_enabled === true,
+      beatBpm: Number.isFinite(beatBpmRaw) ? Math.max(50, Math.min(220, Math.round(beatBpmRaw))) : 120,
+      beatIntensity: Number.isFinite(beatIntensityRaw) ? Math.max(0, Math.min(100, Math.round(beatIntensityRaw))) : 40,
     },
     allowPlayerThemeEditing: state.allow_player_theme_editing !== false && state.allowPlayerThemeEditing !== false,
     levelId: typeof state.level_id === 'string' ? state.level_id : typeof state.levelId === 'string' ? state.levelId : null,

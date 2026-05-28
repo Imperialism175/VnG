@@ -151,6 +151,10 @@ export interface RoomStageFx {
   darkness: number
   flashlightsEnabledFor: string[]
   allowPlayerThemeEditing?: boolean
+  equalizerEnabled?: boolean
+  beatFlickerEnabled?: boolean
+  beatBpm?: number
+  beatIntensity?: number
 }
 
 export interface RoomMusic {

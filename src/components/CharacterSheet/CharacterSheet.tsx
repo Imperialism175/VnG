@@ -30,6 +30,10 @@ interface CharacterSheetProps {
   restrictedView?: boolean
 }
 
+const PRETTY_ASCII_TOP = '/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\ '
+const PRETTY_ASCII_SIDE = '||/\\\\||//\\\\||/\\\\||//\\\\||/\\\\||//\\\\||/\\\\||//\\\\'
+const PRETTY_ASCII_SIDE_BLOCK = Array.from({ length: 80 }, () => PRETTY_ASCII_SIDE).join('\n')
+
 function isHealthCounter(name: string) {
   return /здор|хп|hp/i.test(name)
 }
@@ -328,6 +332,7 @@ export function CharacterSheet({
   const resolvedPresetId = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status)
   const thresholdRows = getThresholdEffectsForCharacter(local.sheet_preset_id ?? null, local.class_status)
   const thresholdDisplayRows = buildThresholdDisplayRows(thresholdRows, resolvedPresetId)
+  const isPrettySheet = resolvedPresetId === 'pretty'
   const activePresetLabel =
     SHEET_PRESETS.find((preset) => preset.id === (local.sheet_preset_id as SheetPresetId | undefined))?.label ??
     null
@@ -352,7 +357,37 @@ export function CharacterSheet({
         ) : undefined
       }
     >
-      <div className="flex flex-col gap-4 min-h-0 overflow-y-auto pr-1">
+      <div className="relative h-full min-h-0 overflow-hidden">
+        {isPrettySheet && (
+          <>
+            <pre
+              aria-hidden
+              className="pointer-events-none absolute top-0 left-0 right-0 z-0 m-0 overflow-hidden px-0.5 sm:px-1 text-[8px] sm:text-[10px] leading-none text-vng-muted/55 whitespace-pre"
+            >
+              {PRETTY_ASCII_TOP.repeat(12)}
+            </pre>
+            <pre
+              aria-hidden
+              className="pointer-events-none absolute bottom-0 left-0 right-0 z-0 m-0 overflow-hidden px-0.5 sm:px-1 text-[8px] sm:text-[10px] leading-none text-vng-muted/55 whitespace-pre"
+            >
+              {PRETTY_ASCII_TOP.repeat(12)}
+            </pre>
+            <pre
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 bottom-0 z-0 m-0 w-3 sm:w-4 overflow-hidden text-[8px] sm:text-[10px] leading-none text-vng-muted/55 whitespace-pre"
+            >
+              {PRETTY_ASCII_SIDE_BLOCK}
+            </pre>
+            <pre
+              aria-hidden
+              className="pointer-events-none absolute right-0 top-0 bottom-0 z-0 m-0 w-3 sm:w-4 overflow-hidden text-[8px] sm:text-[10px] leading-none text-vng-muted/55 whitespace-pre"
+            >
+              {PRETTY_ASCII_SIDE_BLOCK}
+            </pre>
+          </>
+        )}
+      <div className="relative z-10 h-full min-h-0 overflow-y-auto px-3 sm:px-4 py-2 pr-3 sm:pr-4">
+        <div className="flex flex-col gap-4 min-h-0">
         {restrictedView && (
           <p className="text-xs text-vng-muted border border-vng-border px-2 py-1.5 leading-relaxed">
             Полный лист доступен только владельцу, игрокам отряда и NPC, отмеченным мастером как члены
@@ -625,6 +660,8 @@ export function CharacterSheet({
           </div>
         </section>
         )}
+        </div>
+      </div>
       </div>
     </Panel>
   )

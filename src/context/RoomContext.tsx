@@ -96,6 +96,7 @@ interface RoomContextValue {
   dismissScreenMessage: () => void
   setHallOfFame: (hall: HallOfFame) => void
   setStageFx: (darkness: number) => void
+  patchStageFx: (patch: Partial<RoomStageFx>) => void
   setPlayerFlashlight: (playerId: string, enabled: boolean) => void
   setAllowPlayerThemeEditing: (enabled: boolean) => void
   setLevelPreset: (levelId: string | null, variant: 'main' | 'alt') => void
@@ -609,11 +610,54 @@ export function RoomProvider({
     socketRef.current?.send({ type: 'SET_HALL_OF_FAME', hall_of_fame: hall })
   }, [])
 
-  const setStageFx = useCallback((darkness: number) => {
-    const v = Math.max(0, Math.min(100, Math.round(darkness)))
-    setStageFxState((prev) => ({ ...prev, darkness: v }))
-    socketRef.current?.send({ type: 'SET_STAGE_FX', darkness: v })
+  const sendStageFx = useCallback((next: RoomStageFx) => {
+    socketRef.current?.send({
+      type: 'SET_STAGE_FX',
+      darkness: next.darkness,
+      flashlights_enabled_for: next.flashlightsEnabledFor,
+      equalizer_enabled: next.equalizerEnabled,
+      beat_flicker_enabled: next.beatFlickerEnabled,
+      beat_bpm: next.beatBpm,
+      beat_intensity: next.beatIntensity,
+    })
   }, [])
+
+  const patchStageFx = useCallback((patch: Partial<RoomStageFx>) => {
+    setStageFxState((prev) => {
+      const darkness = Number.isFinite(Number(patch.darkness))
+        ? Math.max(0, Math.min(100, Math.round(Number(patch.darkness))))
+        : prev.darkness
+      const flashlightsEnabledFor = Array.isArray(patch.flashlightsEnabledFor)
+        ? patch.flashlightsEnabledFor.map((v) => String(v))
+        : prev.flashlightsEnabledFor
+      const equalizerEnabled =
+        typeof patch.equalizerEnabled === 'boolean' ? patch.equalizerEnabled : prev.equalizerEnabled ?? true
+      const beatFlickerEnabled =
+        typeof patch.beatFlickerEnabled === 'boolean' ? patch.beatFlickerEnabled : prev.beatFlickerEnabled ?? false
+      const beatBpm = Number.isFinite(Number(patch.beatBpm))
+        ? Math.max(50, Math.min(220, Math.round(Number(patch.beatBpm))))
+        : prev.beatBpm ?? 120
+      const beatIntensity = Number.isFinite(Number(patch.beatIntensity))
+        ? Math.max(0, Math.min(100, Math.round(Number(patch.beatIntensity))))
+        : prev.beatIntensity ?? 40
+
+      const next: RoomStageFx = {
+        ...prev,
+        darkness,
+        flashlightsEnabledFor,
+        equalizerEnabled,
+        beatFlickerEnabled,
+        beatBpm,
+        beatIntensity,
+      }
+      sendStageFx(next)
+      return next
+    })
+  }, [sendStageFx])
+
+  const setStageFx = useCallback((darkness: number) => {
+    patchStageFx({ darkness })
+  }, [patchStageFx])
 
   const setPlayerFlashlight = useCallback((playerId: string, enabled: boolean) => {
     setStageFxState((prev) => {
@@ -621,14 +665,10 @@ export function RoomProvider({
       if (enabled) set.add(playerId)
       else set.delete(playerId)
       const next = { ...prev, flashlightsEnabledFor: [...set] }
-      socketRef.current?.send({
-        type: 'SET_STAGE_FX',
-        darkness: prev.darkness,
-        flashlights_enabled_for: next.flashlightsEnabledFor,
-      })
+      sendStageFx(next)
       return next
     })
-  }, [])
+  }, [sendStageFx])
 
   const value = useMemo<RoomContextValue>(
     () => ({
@@ -686,6 +726,7 @@ export function RoomProvider({
       dismissScreenMessage,
       setHallOfFame,
       setStageFx,
+      patchStageFx,
       setPlayerFlashlight,
       createNpcCharacter,
       deleteNpcCharacter,
@@ -743,6 +784,7 @@ export function RoomProvider({
       dismissScreenMessage,
       setHallOfFame,
       setStageFx,
+      patchStageFx,
       setPlayerFlashlight,
       createNpcCharacter,
       deleteNpcCharacter,

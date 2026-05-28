@@ -85,7 +85,15 @@ export type ClientMessage =
   | { type: 'SHOW_SCREEN_MESSAGE'; title?: string; text: string; target_player_id?: string | null }
   | { type: 'DISMISS_SCREEN_MESSAGE' }
   | { type: 'SET_HALL_OF_FAME'; hall_of_fame: { title: string; entries: { id: string; name: string; label?: string }[] } }
-  | { type: 'SET_STAGE_FX'; darkness: number; flashlights_enabled_for?: string[] }
+  | {
+      type: 'SET_STAGE_FX'
+      darkness: number
+      flashlights_enabled_for?: string[]
+      equalizer_enabled?: boolean
+      beat_flicker_enabled?: boolean
+      beat_bpm?: number
+      beat_intensity?: number
+    }
   | { type: 'SET_ALLOW_PLAYER_THEME_EDITING'; enabled: boolean }
   | { type: 'SET_LEVEL_PRESET'; level_id: string | null; variant?: 'main' | 'alt' }
   | { type: 'SET_LEVEL_VISIBILITY'; show_to_players: boolean }

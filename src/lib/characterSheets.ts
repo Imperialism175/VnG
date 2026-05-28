@@ -72,6 +72,32 @@ export function createDefaultTextFields(): TextField[] {
   return SPECIAL_FIELD_NAMES.map((name) => textField(name, ''))
 }
 
+function shuffled<T>(items: T[]): T[] {
+  const arr = [...items]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = arr[i]
+    arr[i] = arr[j]
+    arr[j] = tmp
+  }
+  return arr
+}
+
+const DAUN_RANDOM_STAT_WORDS = [
+  'СКИБИДОН',
+  'БИБИКА',
+  'ШМЯК',
+  'ПУПСЕЛЬ',
+  'БУЛЬК',
+  'КАРАКУЛЯ',
+  'ЧЕБУПЕЛЬ',
+  'ДРЫНЬ',
+  'КУКАРЯ',
+  'БАРАБУЛЬКА',
+  'ТРЯМ',
+  'ФЫРК',
+] as const
+
 function withBase(base: Character, opts?: {
   hp?: { current: number; max: number }
   extraStats?: StatField[]
@@ -166,23 +192,25 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
   {
     id: 'wanderer',
     label: 'Лист Бродяги',
-    points: 'спецправила',
-    pointsValue: null,
+    points: '29 очков',
+    pointsValue: 29,
     notes:
-      'Основной бросок d5 + d12; совпадение (кроме 1 и 1) — ДЖЕКПОТ, эквивалент двум d20.',
+      '5 уровней, 29 очков. Вместо d20 используется связка d12 + d5. Совпадение (кроме двух единиц) — ДЖЕКПОТ = двум d20.',
     apply: (base) =>
       withBase(base, {
         classStatus: 'Лист Бродяги',
-        extraStats: [stat('ПРЕИМУЩЕСТВО В СОРЕВНОВАТЕЛЬНЫХ БРОСКАХ', '1')],
+        skillPoints: 29,
+        extraStats: [stat('УРОВЕНЬ', '5'), stat('ПРЕИМУЩЕСТВО В СОРЕВНОВАТЕЛЬНЫХ БРОСКАХ', '1')],
         extraText: [
           textField(
             'Правило листика',
-            'Вместо d20 используется d5. Дополнительно сравнивается с d12: совпало (кроме 1 и 1) — ДЖЕКПОТ = двум 20.'
+            'Вместо d20 используется пара бросков d12 и d5 одновременно. Если значения совпали (кроме 1 и 1), это ДЖЕКПОТ и он приравнивается к двум 20.'
           ),
           textField(
             'Балансировка',
             'Малые значения d5 компенсируются преимуществом в соревновательных бросках.'
           ),
+          textField('Очки на характеристики', '29'),
         ],
       }),
   },
@@ -258,6 +286,7 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
         classStatus: 'Листок Альт Кайна',
         skillPoints: 29,
         extraText: [
+          textField('Мой Мешочек', ''),
           textField('Правило листика', 'Артефакты распадаются на части; можно собирать новые предметы.'),
           textField('Очки на характеристики', '29'),
         ],
@@ -266,17 +295,22 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
   {
     id: 'molchun',
     label: 'Листок Молчуна',
-    points: '30 очков',
-    pointsValue: 30,
-    notes: 'Новая характеристика ЭНЕРГИЯ: остаток слов прибавляется к успеху заявки.',
+    points: '25 очков',
+    pointsValue: 25,
+    notes: 'Новая характеристика ЭНЕРГИЯ: каждое слово в чате тратит 1 энергию, восстановление через 15 секунд.',
     apply: (base) =>
       withBase(base, {
         classStatus: 'Листок Молчуна',
-        skillPoints: 30,
+        skillPoints: 25,
+        extraStats: [stat('ЭНЕРГИЯ', '10')],
         extraCounters: [counter('Энергия', 10, 10)],
         extraText: [
-          textField('Правило листика', 'Если использовал слов меньше лимита — остаток идет в успех.'),
-          textField('Очки на характеристики', '30'),
+          textField(
+            'Правило листика',
+            'Каждое слово в чате снимает 1 Энергию. Энергия восстанавливается через 15 секунд.'
+          ),
+          textField('Пояснение', 'Энергия — и характеристика, и счётчик листа.'),
+          textField('Очки на характеристики', '25'),
         ],
       }),
   },
@@ -286,29 +320,35 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
     points: 'очки по договоренности',
     pointsValue: null,
     notes: 'Ээээ... я хз че это. Точные очки определяет ГМ.',
-    apply: (base) =>
-      withBase(base, {
+    apply: (base) => {
+      const randomNames = shuffled([...DAUN_RANDOM_STAT_WORDS])
+      const prepared = withBase(base, {
         classStatus: 'Листок Дауна',
         extraText: [
           textField('Правило листика', 'Ээээ... я хз че это. Детали и очки задает ГМ.'),
           textField('Очки на характеристики', 'По договоренности с ГМ'),
         ],
-      }),
+      })
+      return {
+        ...prepared,
+        stats: prepared.stats.map((s, idx) => ({ ...s, name: randomNames[idx % randomNames.length] })),
+      }
+    },
   },
   {
     id: 'garry',
     label: 'Листик Гарри Потера',
-    points: '27 очков',
-    pointsValue: 27,
+    points: '29 очков',
+    pointsValue: 29,
     notes: 'Добавляет характеристики МАГИЯ и ЗЕЛЬЕВАРЕНИЕ.',
     apply: (base) =>
       withBase(base, {
         classStatus: 'Листик Гарри Потера',
-        skillPoints: 27,
+        skillPoints: 29,
         extraStats: [stat('МАГИЯ', '0'), stat('ЗЕЛЬЕВАРЕНИЕ', '0')],
         extraText: [
           textField('Правило листика', 'Магия работает и на литературные приемы, Зельеварение — и на крафт.'),
-          textField('Очки на характеристики', '27'),
+          textField('Очки на характеристики', '29'),
         ],
       }),
   },
@@ -317,28 +357,29 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
     label: 'Листок Инженера',
     points: '27 очков',
     pointsValue: 27,
-    notes: 'Инвентарь заменен на Крафтовый Стол.',
+    notes: 'Инвентарь заменен на КПК.',
     apply: (base) =>
       withBase(base, {
         classStatus: 'Листок Инженера',
         skillPoints: 27,
-        textOverrides: { Инвентарь: 'Крафтовый Стол' },
-        extraText: [textField('Очки на характеристики', '27')],
+        extraText: [textField('КПК', ''), textField('Очки на характеристики', '27')],
       }),
   },
   {
     id: 'daredevil',
     label: 'Лист Сорвиголовы',
-    points: 'спецрежим',
-    pointsValue: null,
-    notes: 'Все заклинания 7 уровня; 1 ХП; добавлен 20 уровень.',
+    points: '23 очка',
+    pointsValue: 23,
+    notes: 'Уровни фиксированы как 1 (7) и 20; 1 ХП.',
     apply: (base) =>
       withBase(base, {
         hp: { current: 1, max: 1 },
         classStatus: 'Лист Сорвиголовы',
+        skillPoints: 23,
         extraStats: [stat('УРОВЕНЬ', '20')],
         extraText: [
-          textField('Правило листика', 'Все заклинания 7 уровня. Выживание на 1 ХП.'),
+          textField('Правило листика', 'Уровни листа: 1 (7) и 20. Выживание на 1 ХП.'),
+          textField('Очки на характеристики', '23'),
         ],
       }),
   },
@@ -352,7 +393,7 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
       withBase(base, {
         classStatus: 'Лист Преодолителя',
         skillPoints: 25,
-        textOverrides: { Бэкграунд: 'Кузница вдохновения' },
+        textOverrides: { Бэкграунд: 'Кузница вдохновения', Предыстория: 'Кузница вдохновения' },
         extraText: [
           textField('Правило листика', 'Вдохновение можно хранить и тратить на переброс.'),
           textField('Очки на характеристики', '25'),
@@ -415,8 +456,8 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
     points: '27 очков',
     pointsValue: 27,
     notes: 'Скорость реакции усиливает числа; если отряд не перебил — прилетает всем.',
-    apply: (base) =>
-      withBase(base, {
+    apply: (base) => {
+      const prepared = withBase(base, {
         classStatus: 'Проклятый Комбо Листик',
         skillPoints: 27,
         extraStats: [stat('СКОРОСТЬ РЕАКЦИИ', '0')],
@@ -427,7 +468,14 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
           ),
           textField('Очки на характеристики', '27'),
         ],
-      }),
+      })
+      return {
+        ...prepared,
+        stats: prepared.stats.map((s) =>
+          String(s.name ?? '').trim().toLowerCase() === 'удача' ? { ...s, name: 'ВЕРА' } : s
+        ),
+      }
+    },
   },
 ]
 
@@ -485,6 +533,12 @@ const BASE_TABLE = table([
   [6, 1.5],
   [8, 4],
   [9, 4],
+])
+
+const CASUAL_DEFAULT_EFFECT = 10
+const CASUAL_OVERRIDES = table([
+  [14, 9],
+  [15, 11],
 ])
 
 const TABLES: Partial<Record<SheetPresetId, ThresholdTable>> = {
@@ -556,10 +610,14 @@ function normalizePresetIdByClassStatus(classStatus: string): SheetPresetId | nu
   return null
 }
 
+function getCasualEffect(statValue: number): StatEffectValue {
+  return CASUAL_OVERRIDES[statValue] ?? CASUAL_DEFAULT_EFFECT
+}
+
 export function getStatEffectForSheet(classStatus: string, statValue: number): StatEffectValue | null {
   const presetId = normalizePresetIdByClassStatus(classStatus)
   if (!presetId) return null
-  if (presetId === 'casual') return 10
+  if (presetId === 'casual') return getCasualEffect(statValue)
   const byPreset = TABLES[presetId] ?? BASE_TABLE
   return byPreset[statValue] ?? null
 }
@@ -571,7 +629,7 @@ export function getStatEffectForCharacterSheet(
 ): StatEffectValue | null {
   const presetId = resolveCharacterPresetId(sheetPresetId, classStatus)
   if (!presetId) return null
-  if (presetId === 'casual') return 10
+  if (presetId === 'casual') return getCasualEffect(statValue)
   const byPreset = TABLES[presetId] ?? BASE_TABLE
   return byPreset[statValue] ?? null
 }
@@ -593,7 +651,11 @@ export function getThresholdEffectsForCharacter(
   const presetId = resolveCharacterPresetId(sheetPresetId, classStatus)
   if (!presetId) return []
   if (presetId === 'casual') {
-    return [{ threshold: 0, effect: 10 }]
+    return [
+      { threshold: 0, effect: CASUAL_DEFAULT_EFFECT },
+      { threshold: 14, effect: CASUAL_OVERRIDES[14] },
+      { threshold: 15, effect: CASUAL_OVERRIDES[15] },
+    ]
   }
   const byPreset = TABLES[presetId] ?? BASE_TABLE
   return Object.entries(byPreset)

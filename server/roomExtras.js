@@ -14,7 +14,7 @@ export function createRoomExtras() {
     activePoll: null,
     screenMessage: null,
     hallOfFame: { title: 'ЗАЛ СЛАВЫ', entries: [] },
-    stageFx: { darkness: 100, flashlightsEnabledFor: [] },
+    stageFx: { darkness: 100, flashlightsEnabledFor: [], equalizerEnabled: true, beatFlickerEnabled: false, beatBpm: 120, beatIntensity: 40 },
     allowPlayerThemeEditing: true,
     levelId: null,
     levelVariant: 'main',
@@ -107,11 +107,21 @@ export function serializeRoomExtras(room) {
     room.hallOfFame = { title: 'ЗАЛ СЛАВЫ', entries: [] }
   }
   if (!room.stageFx || typeof room.stageFx.darkness !== 'number') {
-    room.stageFx = { darkness: 100, flashlightsEnabledFor: [] }
+    room.stageFx = { darkness: 100, flashlightsEnabledFor: [], equalizerEnabled: true, beatFlickerEnabled: false, beatBpm: 120, beatIntensity: 40 }
   }
   if (!Array.isArray(room.stageFx.flashlightsEnabledFor)) {
     room.stageFx.flashlightsEnabledFor = []
   }
+  if (typeof room.stageFx.equalizerEnabled !== 'boolean') {
+    room.stageFx.equalizerEnabled = true
+  }
+  if (typeof room.stageFx.beatFlickerEnabled !== 'boolean') {
+    room.stageFx.beatFlickerEnabled = false
+  }
+  const beatBpm = Number(room.stageFx.beatBpm)
+  room.stageFx.beatBpm = Number.isFinite(beatBpm) ? Math.max(50, Math.min(220, Math.round(beatBpm))) : 120
+  const beatIntensity = Number(room.stageFx.beatIntensity)
+  room.stageFx.beatIntensity = Number.isFinite(beatIntensity) ? Math.max(0, Math.min(100, Math.round(beatIntensity))) : 40
   if (typeof room.allowPlayerThemeEditing !== 'boolean') {
     room.allowPlayerThemeEditing = true
   }
