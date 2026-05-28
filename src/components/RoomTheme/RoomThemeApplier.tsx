@@ -5,7 +5,6 @@ import { applyThemeVars } from '@/lib/theme'
 interface RoomThemeApplierProps {
   theme: RoomTheme
   stageFx?: RoomStageFx
-  musicPlaying?: boolean
   viewerPlayerId?: string
   viewerIsGm?: boolean
   mobileUiScale?: number
@@ -15,7 +14,6 @@ interface RoomThemeApplierProps {
 export function RoomThemeApplier({
   theme,
   stageFx,
-  musicPlaying = false,
   viewerPlayerId,
   viewerIsGm,
   mobileUiScale = 1,
@@ -35,22 +33,14 @@ export function RoomThemeApplier({
   )
   const darknessOpacity = Math.max(0, Math.min(1, (100 - (stageFx?.darkness ?? 100)) / 100))
   const gmMonochromeAmount = viewerIsGm ? darknessOpacity : 0
-  const beatFlickerEnabled = Boolean(stageFx?.beatFlickerEnabled && musicPlaying)
-  const beatBpm = Math.max(50, Math.min(220, stageFx?.beatBpm ?? 120))
-  const beatDurationMs = Math.round(60000 / beatBpm)
-  const beatIntensity = Math.max(0, Math.min(100, stageFx?.beatIntensity ?? 40))
 
   return (
     <div
       ref={ref}
-      className={`vng-room-shell vng-retro-shell vng-page flex flex-col w-full max-lg:min-h-full lg:h-dvh lg:max-h-dvh lg:overflow-hidden ${
-        beatFlickerEnabled ? 'vng-room-shell--beat-flicker' : ''
-      }`}
+      className="vng-room-shell vng-retro-shell vng-page flex flex-col w-full max-lg:min-h-full lg:h-dvh lg:max-h-dvh lg:overflow-hidden"
       style={{
         ['--vng-stage-light' as string]: String(stageFx?.darkness ?? 100),
         ['--vng-mobile-ui-scale' as string]: String(Math.max(0.8, Math.min(1.6, mobileUiScale))),
-        ['--vng-beat-duration-ms' as string]: `${beatDurationMs}ms`,
-        ['--vng-beat-intensity' as string]: String((beatIntensity / 100).toFixed(3)),
       }}
       onMouseMove={(e) => {
         if (!flashlightEnabled) return
@@ -62,9 +52,7 @@ export function RoomThemeApplier({
       }}
     >
       <div
-        className={`relative z-[1] flex flex-col min-h-0 flex-1 ${
-          beatFlickerEnabled ? 'vng-room-shell__beat-surface' : ''
-        }`}
+        className="relative z-[1] flex flex-col min-h-0 flex-1"
         style={viewerIsGm ? { filter: `grayscale(${gmMonochromeAmount})` } : undefined}
       >
         {children}

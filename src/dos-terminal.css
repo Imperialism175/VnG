@@ -1101,59 +1101,6 @@ textarea[class*="border-vng"] {
   transition: opacity 180ms linear;
 }
 
-.vng-room-shell__beat-surface {
-  animation: vng-room-beat-flicker var(--vng-beat-duration-ms, 500ms) ease-in-out infinite;
-}
-
-@keyframes vng-room-beat-flicker {
-  0%,
-  100% {
-    opacity: 1;
-    filter: none;
-  }
-  16% {
-    opacity: calc(1 - var(--vng-beat-intensity, 0.4) * 0.22);
-    filter: brightness(calc(1 + var(--vng-beat-intensity, 0.4) * 0.16));
-  }
-  32% {
-    opacity: calc(1 - var(--vng-beat-intensity, 0.4) * 0.1);
-    filter: brightness(calc(1 + var(--vng-beat-intensity, 0.4) * 0.08));
-  }
-}
-
-.vng-music-eq {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 16px;
-  width: 50px;
-  opacity: 0.95;
-}
-
-.vng-music-eq__bar {
-  width: 2px;
-  height: 3px;
-  background: var(--vng-dos-muted);
-}
-
-.vng-music-eq__bar--active {
-  animation: vng-music-eq-bar 620ms ease-in-out infinite;
-  background: var(--vng-dos-fg);
-}
-
-@keyframes vng-music-eq-bar {
-  0%,
-  100% {
-    height: 3px;
-  }
-  30% {
-    height: 14px;
-  }
-  60% {
-    height: 7px;
-  }
-}
-
 .vng-room-roster,
 .vng-room-sidefeed,
 .vng-encounter-editor-panel,

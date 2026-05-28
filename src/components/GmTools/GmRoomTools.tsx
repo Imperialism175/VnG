@@ -20,16 +20,6 @@ interface GmRoomToolsProps {
   hasScreenMessage: boolean
   stageDarkness: number
   onSetStageDarkness: (value: number) => void
-  stageEqualizerEnabled: boolean
-  stageBeatFlickerEnabled: boolean
-  stageBeatBpm: number
-  stageBeatIntensity: number
-  onPatchStageFx: (patch: {
-    equalizerEnabled?: boolean
-    beatFlickerEnabled?: boolean
-    beatBpm?: number
-    beatIntensity?: number
-  }) => void
   flashlightsEnabledFor: string[]
   onSetPlayerFlashlight: (playerId: string, enabled: boolean) => void
   allowPlayerThemeEditing: boolean
@@ -54,11 +44,6 @@ export function GmRoomTools({
   hasScreenMessage,
   stageDarkness,
   onSetStageDarkness,
-  stageEqualizerEnabled,
-  stageBeatFlickerEnabled,
-  stageBeatBpm,
-  stageBeatIntensity,
-  onPatchStageFx,
   flashlightsEnabledFor,
   onSetPlayerFlashlight,
   allowPlayerThemeEditing,
@@ -299,65 +284,6 @@ export function GmRoomTools({
               </Button>
             </>
           )}
-        </div>
-      </section>
-
-      <section className="vng-panel p-3 space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-vng-muted">Музыкальные эффекты UI</h3>
-        <p className="text-xs text-vng-muted">
-          Эффекты применяются у всех игроков в комнате. Затемнение сцены остаётся поверх интерфейса.
-        </p>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-vng-muted">Эквалайзер в плеере</span>
-          <Button
-            type="button"
-            size="sm"
-            variant={stageEqualizerEnabled ? 'secondary' : 'ghost'}
-            onClick={() => onPatchStageFx({ equalizerEnabled: !stageEqualizerEnabled })}
-          >
-            {stageEqualizerEnabled ? 'ВКЛ' : 'ВЫКЛ'}
-          </Button>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-vng-muted">Мерцание интерфейса под бит</span>
-          <Button
-            type="button"
-            size="sm"
-            variant={stageBeatFlickerEnabled ? 'secondary' : 'ghost'}
-            onClick={() => onPatchStageFx({ beatFlickerEnabled: !stageBeatFlickerEnabled })}
-          >
-            {stageBeatFlickerEnabled ? 'ВКЛ' : 'ВЫКЛ'}
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-vng-muted shrink-0">BPM:</span>
-          <input
-            type="range"
-            min={50}
-            max={220}
-            step={1}
-            value={stageBeatBpm}
-            onChange={(e) => onPatchStageFx({ beatBpm: Number(e.target.value) })}
-            className="flex-1"
-            aria-label="Скорость мерцания BPM"
-            disabled={!stageBeatFlickerEnabled}
-          />
-          <span className="text-xs vng-mono w-12 text-right">{stageBeatBpm}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-vng-muted shrink-0">Сила:</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={stageBeatIntensity}
-            onChange={(e) => onPatchStageFx({ beatIntensity: Number(e.target.value) })}
-            className="flex-1"
-            aria-label="Сила мерцания"
-            disabled={!stageBeatFlickerEnabled}
-          />
-          <span className="text-xs vng-mono w-12 text-right">{stageBeatIntensity}%</span>
         </div>
       </section>
 
