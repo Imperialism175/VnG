@@ -36,11 +36,11 @@ export async function apiListRooms() {
   return apiFetch<{ rooms: RoomSummary[] }>('/api/rooms')
 }
 
-export async function apiCreateRoom(name: string, playerId: string, playerName: string) {
+export async function apiCreateRoom(name: string, playerId: string, playerName: string, inviteOnly = false) {
   return apiFetch<{
     room: RoomInfo
     player: { is_gm: boolean }
-  }>('/api/rooms', { method: 'POST', body: JSON.stringify({ name, playerId, playerName }) })
+  }>('/api/rooms', { method: 'POST', body: JSON.stringify({ name, playerId, playerName, inviteOnly }) })
 }
 
 export async function apiJoinRoom(roomId: string, playerId: string, playerName: string) {

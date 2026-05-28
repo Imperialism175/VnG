@@ -438,6 +438,7 @@ const httpServer = createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/rooms') {
       const list = [...rooms.values()]
+        .filter((room) => !room.inviteOnly)
         .map((room) => {
           const gm = room.players.get(room.gmId)
           return {
@@ -464,12 +465,13 @@ const httpServer = createServer(async (req, res) => {
         : {}
 
     if (req.method === 'POST' && url.pathname === '/api/rooms') {
-      const { name, playerId, playerName } = body
+      const { name, playerId, playerName, inviteOnly } = body
       const normalizedName = normalizeArcadeName(playerName)
       const id = randomUUID()
       const room = {
         id,
         name: name.trim(),
+        inviteOnly: Boolean(inviteOnly),
         createdAt: Date.now(),
         hostId: playerId,
         gmId: playerId,

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Crown, Home, Loader2, Menu } from 'lucide-react'
 import { RoomProvider, useRoom } from '@/context/RoomContext'
 import { apiGetRoomById } from '@/lib/api'
-import { fetchServerInfo, getInviteBaseUrl } from '@/lib/runtime'
+import { getInviteBaseUrl } from '@/lib/runtime'
 import { clearSession, copyToClipboard, loadSession } from '@/lib/utils'
 import { PartySheetBrowser } from '@/components/CharacterSheet/PartySheetBrowser'
 import { DiceRoller } from '@/components/DiceRoller/DiceRoller'
@@ -109,7 +109,6 @@ function GameRoomContent() {
   const [gmTab, setGmTab] = useState<GmTabId>('players')
   const [showGmPanel, setShowGmPanel] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [lanIps, setLanIps] = useState<string[]>([])
   const [dismissedScreenId, setDismissedScreenId] = useState<string | null>(null)
   const [themePanelOpen, setThemePanelOpen] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -129,10 +128,6 @@ function GameRoomContent() {
 
   const showEncounterTab = false
   const showVoteTab = Boolean(activePoll)
-
-  useEffect(() => {
-    if (session.isGm) fetchServerInfo().then((info) => setLanIps(info?.addresses ?? []))
-  }, [session.isGm])
 
   useEffect(() => {
     const onGesture = () => resumeRoomAudio()
@@ -184,7 +179,6 @@ function GameRoomContent() {
     }
   }, [mobileUiScale])
 
-  const inviteUrl = getInviteBaseUrl()
   const sessionStartMs = getRoomSessionStartMs(room?.created_at)
   const activeLevel = getLevelPreset(levelId)
   const rawLevelLabel =
@@ -196,12 +190,12 @@ function GameRoomContent() {
   const levelLabel = session.isGm || showLevelToPlayers ? rawLevelLabel : null
 
   async function handleCopy() {
+    const inviteLink = `${getInviteBaseUrl()}/#/invite/${encodeURIComponent(room?.id ?? '')}`
     const lines = [
       `Сессия: ${room?.name ?? 'ВнГ'}`,
-      `Откройте лобби и выберите комнату в списке`,
-      inviteUrl,
+      `Откройте ссылку приглашения и войдите в комнату`,
+      inviteLink,
     ]
-    if (lanIps.length) lines.push(`Сервер: http://${lanIps[0]}:5173`)
     await copyToClipboard(lines.join('\n'))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Crown, DoorOpen, Network, RefreshCw, Server, Users } from 'lucide-react'
 import { apiCreateRoom, apiJoinRoom, apiListRooms, type RoomSummary } from '@/lib/api'
 import { checkServerOnline, getServerHost, setServerHost } from '@/lib/runtime'
 import { getOrCreatePlayerId, saveSession } from '@/lib/utils'
 import { Button, Input } from '@/components/ui/Button'
 
-type Mode = 'choose' | 'create' | 'join'
+type Mode = 'choose' | 'create' | 'join' | 'invite'
 const ARCADE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('')
 
 function normalizeArcadeNick(input: string): string {
@@ -25,9 +25,12 @@ function shiftArcadeChar(current: string, step: 1 | -1): string {
 
 export function HomePage() {
   const navigate = useNavigate()
+  const { roomId: invitedRoomIdParam } = useParams<{ roomId?: string }>()
+  const invitedRoomId = String(invitedRoomIdParam ?? '').trim()
   const [mode, setMode] = useState<Mode>('choose')
   const [playerName, setPlayerName] = useState('AAA')
   const [roomName, setRoomName] = useState('')
+  const [inviteOnly, setInviteOnly] = useState(true)
   const [serverHost, setServerHostState] = useState(() => {
     if (typeof window !== 'undefined') {
       const h = window.location.hostname
@@ -45,6 +48,15 @@ export function HomePage() {
   useEffect(() => {
     checkServerOnline().then(setServerOnline)
   }, [serverHost])
+
+  useEffect(() => {
+    if (invitedRoomId) {
+      setMode('invite')
+      setError(null)
+    } else if (mode === 'invite') {
+      setMode('choose')
+    }
+  }, [invitedRoomId, mode])
 
   const loadRooms = useCallback(async () => {
     if (!serverOnline) return
@@ -81,7 +93,7 @@ export function HomePage() {
     try {
       applyServerHost(serverHost)
       const playerId = getOrCreatePlayerId()
-      const { room } = await apiCreateRoom(roomName.trim(), playerId, nick)
+      const { room } = await apiCreateRoom(roomName.trim(), playerId, nick, inviteOnly)
       saveSession({ playerId, name: nick, roomId: room.id, isGm: true })
       navigate(`/room/${room.id}`)
     } catch (err) {
@@ -178,6 +190,14 @@ export function HomePage() {
             </h2>
             <ArcadeNickPicker value={playerName} onChange={setPlayerName} />
             <Input label="Название сессии" value={roomName} onChange={(e) => setRoomName(e.target.value)} required />
+            <label className="flex items-center gap-2 text-sm text-vng-muted">
+              <input
+                type="checkbox"
+                checked={inviteOnly}
+                onChange={(e) => setInviteOnly(e.target.checked)}
+              />
+              Только по ссылке приглашения (скрыть из лобби)
+            </label>
             {error && <p className="text-sm text-vng-danger">{error}</p>}
             <div className="flex gap-2">
               <Button type="button" variant="ghost" onClick={() => setMode('choose')}>Назад</Button>
@@ -248,6 +268,28 @@ export function HomePage() {
             <Button type="button" variant="ghost" onClick={() => setMode('choose')}>
               Назад
             </Button>
+          </div>
+        )}
+
+        {mode === 'invite' && invitedRoomId && (
+          <div className="vng-home-form flex flex-col gap-4">
+            <h2 className="vng-home-section-title text-lg font-bold flex items-center gap-2">
+              <DoorOpen size={18} className="text-vng-blue" /> Вход по приглашению
+            </h2>
+            <p className="text-xs text-vng-muted break-all">Комната: {invitedRoomId}</p>
+            <ArcadeNickPicker value={playerName} onChange={setPlayerName} />
+            {error && <p className="text-sm text-vng-danger">{error}</p>}
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" onClick={() => navigate('/')}>В лобби</Button>
+              <Button
+                type="button"
+                className="flex-1"
+                disabled={!serverOnline || joiningId !== null}
+                onClick={() => void handleJoinRoom(invitedRoomId)}
+              >
+                {joiningId === invitedRoomId ? 'Вход…' : 'Войти в комнату'}
+              </Button>
+            </div>
           </div>
         )}
       </main>

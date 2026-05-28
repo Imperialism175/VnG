@@ -7,6 +7,7 @@ export function App() {
     <HashRouter>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/invite/:roomId" element={<HomePage />} />
         <Route path="/room/:roomId" element={<GameRoomPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
