@@ -541,11 +541,23 @@ const CASUAL_OVERRIDES = table([
   [15, 11],
 ])
 
+function getAltKainaEffect(statValue: number): StatEffectValue | null {
+  const value = Math.round(Number(statValue))
+  if (!Number.isFinite(value)) return null
+  if (value < 15) return null
+  if (value <= 16) return 0
+  if (value === 17) return -2
+  if (value === 18) return -4
+  if (value === 19) return -6
+  if (value === 20) return -17
+  if (value === 21) return 13
+  if (value === 22) return -8
+  if (value === 23) return -9
+  return -9 - (value - 23) * 2
+}
+
 const TABLES: Partial<Record<SheetPresetId, ThresholdTable>> = {
-  'alt-kaina': table([
-    [1, 3], [2, 1.5], [6, 1.5], [8, 4], [9, 4],
-    [14, -2], [18, -4], [19, -6], [20, -14], [21, 13], [22, -8], [29, -9],
-  ]),
+  'alt-kaina': table([]),
   molchun: table([
     [1, 3], [2, 1.5], [6, 1.5], [8, 4], [9, 4], [17, -2], [18, -4], [19, -6], [20, -8],
   ]),
@@ -617,6 +629,7 @@ function getCasualEffect(statValue: number): StatEffectValue {
 export function getStatEffectForSheet(classStatus: string, statValue: number): StatEffectValue | null {
   const presetId = normalizePresetIdByClassStatus(classStatus)
   if (!presetId) return null
+  if (presetId === 'alt-kaina') return getAltKainaEffect(statValue)
   if (presetId === 'casual') return getCasualEffect(statValue)
   const byPreset = TABLES[presetId] ?? BASE_TABLE
   return byPreset[statValue] ?? null
@@ -629,6 +642,7 @@ export function getStatEffectForCharacterSheet(
 ): StatEffectValue | null {
   const presetId = resolveCharacterPresetId(sheetPresetId, classStatus)
   if (!presetId) return null
+  if (presetId === 'alt-kaina') return getAltKainaEffect(statValue)
   if (presetId === 'casual') return getCasualEffect(statValue)
   const byPreset = TABLES[presetId] ?? BASE_TABLE
   return byPreset[statValue] ?? null
@@ -656,6 +670,14 @@ export function getThresholdEffectsForCharacter(
       { threshold: 14, effect: CASUAL_OVERRIDES[14] },
       { threshold: 15, effect: CASUAL_OVERRIDES[15] },
     ]
+  }
+  if (presetId === 'alt-kaina') {
+    const rows: Array<{ threshold: number; effect: StatEffectValue }> = []
+    for (let value = 15; value <= 40; value++) {
+      const effect = getAltKainaEffect(value)
+      if (effect !== null) rows.push({ threshold: value, effect })
+    }
+    return rows
   }
   const byPreset = TABLES[presetId] ?? BASE_TABLE
   return Object.entries(byPreset)

@@ -304,7 +304,17 @@ export function CharacterSheet({
     if (specialFieldLocks.has(id) && !gmEditing) return
     scheduleSave({
       ...local,
-      text_fields: (local.text_fields ?? []).map((f) => (f.id === id ? { ...f, ...patch } : f)),
+      text_fields: (local.text_fields ?? []).map((f) => {
+        if (f.id !== id) return f
+        let nextPatch = patch
+        const isAltKainaBagField =
+          resolvedPresetId === 'alt-kaina' &&
+          String(f.name ?? '').trim().toLowerCase() === 'мой мешочек'
+        if (isAltKainaBagField && typeof patch.value === 'string') {
+          nextPatch = { ...patch, value: patch.value.slice(0, 50) }
+        }
+        return { ...f, ...nextPatch }
+      }),
     })
   }
 
@@ -462,6 +472,9 @@ export function CharacterSheet({
             {textFields.map((field) => {
               const fieldLocked = specialFieldLocks.has(field.id)
               const fieldReadOnly = viewOnly || (!gmEditing && fieldLocked)
+              const isAltKainaBagField =
+                resolvedPresetId === 'alt-kaina' &&
+                String(field.name ?? '').trim().toLowerCase() === 'мой мешочек'
               return (
                 <div
                   key={field.id}
@@ -503,8 +516,12 @@ export function CharacterSheet({
                     className="w-full min-h-[72px] px-2 py-2 text-sm rounded-lg bg-vng-elevated border border-vng-border focus:outline-none focus:border-vng-amber/50 resize-y"
                     value={field.value}
                     onChange={(e) => updateTextField(field.id, { value: e.target.value })}
+                    maxLength={isAltKainaBagField ? 50 : undefined}
                     placeholder="Текст поля…"
                   />
+                )}
+                {isAltKainaBagField && (
+                  <p className="text-[10px] text-vng-muted">Лимит: 50 символов ({field.value.length}/50)</p>
                 )}
                 {!gmEditing && fieldLocked && (
                   <p className="text-[10px] text-vng-muted">Поле заблокировано ГМ</p>
