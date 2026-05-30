@@ -11,6 +11,7 @@ export const DEFAULT_STATS = [
 ] as const
 
 export type SheetPresetId =
+  | 'classic'
   | 'core-sheet'
   | 'npc-vessel-deltarune'
   | 'wanderer'
@@ -55,6 +56,8 @@ function textField(name: string, value: string): TextField {
 export const SKILL_POINTS_COUNTER_NAME = 'Очки характеристик'
 export const SPECIAL_FIELD_NAMES = [
   'Способности',
+  'Инвентарь',
+  'Описание',
   'Бэкграунд',
   'Заметки ГМ',
   'Правило листика',
@@ -143,6 +146,19 @@ function withBase(base: Character, opts?: {
 }
 
 export const SHEET_PRESETS: SheetPresetDef[] = [
+  {
+    id: 'classic',
+    label: 'Классический листик',
+    points: '27 очков',
+    pointsValue: 27,
+    notes:
+      'База: 27 очков характеристик, 6 базовых характеристик, 7 уровней заклинаний, поля Инвентарь и Описание.',
+    apply: (base) =>
+      withBase(base, {
+        classStatus: 'Классический листик',
+        skillPoints: 27,
+      }),
+  },
   {
     id: 'core-sheet',
     label: 'Ядролист',
@@ -544,7 +560,7 @@ const CASUAL_OVERRIDES = table([
 function getAltKainaEffect(statValue: number): StatEffectValue | null {
   const value = Math.round(Number(statValue))
   if (!Number.isFinite(value)) return null
-  if (value < 15) return null
+  if (value < 15) return getClassicEffect(value)
   if (value <= 16) return 0
   if (value === 17) return -2
   if (value === 18) return -4
@@ -556,7 +572,20 @@ function getAltKainaEffect(statValue: number): StatEffectValue | null {
   return -9 - (value - 23) * 2
 }
 
+function getClassicEffect(statValue: number): StatEffectValue | null {
+  const value = Math.round(Number(statValue))
+  if (!Number.isFinite(value) || value < 1) return null
+  if (value === 1) return 3
+  if (value === 2) return 1.5
+  if (value === 6) return 1.5
+  if (value === 8 || value === 9) return 4
+  if (value === 15) return 2
+  if (value >= 20) return -2 * (value - 19)
+  return 0
+}
+
 const TABLES: Partial<Record<SheetPresetId, ThresholdTable>> = {
+  classic: table([]),
   'alt-kaina': table([]),
   molchun: table([
     [1, 3], [2, 1.5], [6, 1.5], [8, 4], [9, 4], [17, -2], [18, -4], [19, -6], [20, -8],
@@ -605,6 +634,7 @@ function normalizePresetIdByClassStatus(classStatus: string): SheetPresetId | nu
   if (!value) return null
   const preset = SHEET_PRESETS.find((p) => p.label.toLowerCase() === value)
   if (preset) return preset.id
+  if (value.includes('классичес')) return 'classic'
   if (value.includes('альт кайна')) return 'alt-kaina'
   if (value.includes('молчун')) return 'molchun'
   if (value.includes('гарри')) return 'garry'
@@ -628,11 +658,12 @@ function getCasualEffect(statValue: number): StatEffectValue {
 
 export function getStatEffectForSheet(classStatus: string, statValue: number): StatEffectValue | null {
   const presetId = normalizePresetIdByClassStatus(classStatus)
-  if (!presetId) return null
+  if (!presetId) return getClassicEffect(statValue)
+  if (presetId === 'classic') return getClassicEffect(statValue)
   if (presetId === 'alt-kaina') return getAltKainaEffect(statValue)
   if (presetId === 'casual') return getCasualEffect(statValue)
   const byPreset = TABLES[presetId] ?? BASE_TABLE
-  return byPreset[statValue] ?? null
+  return byPreset[statValue] ?? getClassicEffect(statValue)
 }
 
 export function getStatEffectForCharacterSheet(
@@ -641,11 +672,12 @@ export function getStatEffectForCharacterSheet(
   statValue: number
 ): StatEffectValue | null {
   const presetId = resolveCharacterPresetId(sheetPresetId, classStatus)
-  if (!presetId) return null
+  if (!presetId) return getClassicEffect(statValue)
+  if (presetId === 'classic') return getClassicEffect(statValue)
   if (presetId === 'alt-kaina') return getAltKainaEffect(statValue)
   if (presetId === 'casual') return getCasualEffect(statValue)
   const byPreset = TABLES[presetId] ?? BASE_TABLE
-  return byPreset[statValue] ?? null
+  return byPreset[statValue] ?? getClassicEffect(statValue)
 }
 
 export function resolveCharacterPresetId(
@@ -655,7 +687,7 @@ export function resolveCharacterPresetId(
   if (sheetPresetId && SHEET_PRESETS.some((p) => p.id === sheetPresetId)) {
     return sheetPresetId as SheetPresetId
   }
-  return normalizePresetIdByClassStatus(classStatus)
+  return normalizePresetIdByClassStatus(classStatus) ?? 'classic'
 }
 
 export function getThresholdEffectsForCharacter(
@@ -664,6 +696,14 @@ export function getThresholdEffectsForCharacter(
 ): Array<{ threshold: number; effect: StatEffectValue }> {
   const presetId = resolveCharacterPresetId(sheetPresetId, classStatus)
   if (!presetId) return []
+  if (presetId === 'classic') {
+    const rows: Array<{ threshold: number; effect: StatEffectValue }> = []
+    for (let value = 1; value <= 40; value++) {
+      const effect = getClassicEffect(value)
+      if (effect !== null) rows.push({ threshold: value, effect })
+    }
+    return rows
+  }
   if (presetId === 'casual') {
     return [
       { threshold: 0, effect: CASUAL_DEFAULT_EFFECT },
@@ -680,10 +720,17 @@ export function getThresholdEffectsForCharacter(
     return rows
   }
   const byPreset = TABLES[presetId] ?? BASE_TABLE
-  return Object.entries(byPreset)
+  const rows = Object.entries(byPreset)
     .map(([threshold, effect]) => ({ threshold: Number(threshold), effect }))
     .filter((row) => Number.isFinite(row.threshold))
     .sort((a, b) => a.threshold - b.threshold)
+  if (rows.length > 0) return rows
+  const fallbackRows: Array<{ threshold: number; effect: StatEffectValue }> = []
+  for (let value = 1; value <= 40; value++) {
+    const effect = getClassicEffect(value)
+    if (effect !== null) fallbackRows.push({ threshold: value, effect })
+  }
+  return fallbackRows
 }
 
 export function isResearcherSheet(sheetPresetId: string | null | undefined, classStatus: string): boolean {

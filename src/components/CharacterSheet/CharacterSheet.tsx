@@ -82,6 +82,11 @@ function isAbilitiesField(name: string): boolean {
   return name.trim().toLowerCase() === 'способности'
 }
 
+function isInventoryLikeField(name: string): boolean {
+  const normalized = String(name ?? '').trim().toLowerCase()
+  return normalized === 'инвентарь' || normalized.includes('мешочек') || normalized === 'кпк'
+}
+
 function parseAbilityLevels(value: string): Record<number, string> {
   const result: Record<number, string> = { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '' }
   const src = String(value ?? '')
@@ -300,6 +305,25 @@ export function CharacterSheet({
     })
   }
 
+  function adjustSkillPoints(delta: 1 | -1) {
+    if (!gmEditing) return
+    const pointsIdx = local.counters.findIndex((c) => isSkillPointCounter(c.name))
+    if (pointsIdx < 0) {
+      if (delta < 0) return
+      scheduleSave({
+        ...local,
+        counters: [...local.counters, { id: generateId(), name: 'Очки характеристик', current: 1, max: 999 }],
+      })
+      return
+    }
+    scheduleSave({
+      ...local,
+      counters: local.counters.map((c, i) =>
+        i === pointsIdx ? { ...c, current: Math.max(0, c.current + delta) } : c
+      ),
+    })
+  }
+
   function updateTextField(id: string, patch: Partial<TextField>) {
     if (specialFieldLocks.has(id) && !gmEditing) return
     scheduleSave({
@@ -307,11 +331,9 @@ export function CharacterSheet({
       text_fields: (local.text_fields ?? []).map((f) => {
         if (f.id !== id) return f
         let nextPatch = patch
-        const isAltKainaBagField =
-          resolvedPresetId === 'alt-kaina' &&
-          String(f.name ?? '').trim().toLowerCase() === 'мой мешочек'
-        if (isAltKainaBagField && typeof patch.value === 'string') {
-          nextPatch = { ...patch, value: patch.value.slice(0, 50) }
+        const inventoryLikeField = isInventoryLikeField(f.name)
+        if (inventoryLikeField && typeof patch.value === 'string') {
+          nextPatch = { ...patch, value: patch.value.slice(0, 30) }
         }
         return { ...f, ...nextPatch }
       }),
@@ -472,9 +494,7 @@ export function CharacterSheet({
             {textFields.map((field) => {
               const fieldLocked = specialFieldLocks.has(field.id)
               const fieldReadOnly = viewOnly || (!gmEditing && fieldLocked)
-              const isAltKainaBagField =
-                resolvedPresetId === 'alt-kaina' &&
-                String(field.name ?? '').trim().toLowerCase() === 'мой мешочек'
+              const inventoryLikeField = isInventoryLikeField(field.name)
               return (
                 <div
                   key={field.id}
@@ -516,12 +536,12 @@ export function CharacterSheet({
                     className="w-full min-h-[72px] px-2 py-2 text-sm rounded-lg bg-vng-elevated border border-vng-border focus:outline-none focus:border-vng-amber/50 resize-y"
                     value={field.value}
                     onChange={(e) => updateTextField(field.id, { value: e.target.value })}
-                    maxLength={isAltKainaBagField ? 50 : undefined}
+                    maxLength={inventoryLikeField ? 30 : undefined}
                     placeholder="Текст поля…"
                   />
                 )}
-                {isAltKainaBagField && (
-                  <p className="text-[10px] text-vng-muted">Лимит: 50 символов ({field.value.length}/50)</p>
+                {inventoryLikeField && (
+                  <p className="text-[10px] text-vng-muted">Лимит: 30 символов ({field.value.length}/30)</p>
                 )}
                 {!gmEditing && fieldLocked && (
                   <p className="text-[10px] text-vng-muted">Поле заблокировано ГМ</p>
@@ -644,14 +664,26 @@ export function CharacterSheet({
           {(() => {
             const spCounter = local.counters.find((c) => isSkillPointCounter(c.name))
             return (
-              <p className="text-xs text-vng-muted mb-2">
-                Очки на характеристики:{' '}
-                <span className="text-vng-amber font-semibold">
-                  {spCounter?.current ?? 0}
-                </span>
-                {' '}— тратьте кнопками +/− у статов
-                {!gmEditing && statPointsLocked ? ' (заблокировано ГМ)' : ''}
-              </p>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-xs text-vng-muted">
+                  Очки на характеристики:{' '}
+                  <span className="text-vng-amber font-semibold">
+                    {spCounter?.current ?? 0}
+                  </span>
+                  {' '}— тратьте кнопками +/− у статов
+                  {!gmEditing && statPointsLocked ? ' (заблокировано ГМ)' : ''}
+                </p>
+                {gmEditing && (
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" type="button" onClick={() => adjustSkillPoints(-1)}>
+                      -1 очко
+                    </Button>
+                    <Button variant="ghost" size="sm" type="button" onClick={() => adjustSkillPoints(1)}>
+                      +1 очко
+                    </Button>
+                  </div>
+                )}
+              </div>
             )
           })()}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
