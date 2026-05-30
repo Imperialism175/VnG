@@ -300,6 +300,32 @@
   backdrop-filter: blur(2.5px);
 }
 
+@keyframes vng-engineer-glitch-shift {
+  0%, 100% {
+    transform: translate(0, 0);
+    filter: hue-rotate(0deg);
+    opacity: 1;
+  }
+  22% {
+    transform: translate(0.5px, -0.5px);
+    filter: hue-rotate(35deg);
+  }
+  49% {
+    transform: translate(-0.75px, 0.5px);
+    filter: hue-rotate(-35deg);
+    opacity: 0.9;
+  }
+  73% {
+    transform: translate(0.5px, 0.75px);
+    filter: hue-rotate(22deg);
+  }
+}
+
+.vng-sheet-engineer-glitch .vng-stat-tile,
+.vng-sheet-engineer-glitch .vng-counter-block {
+  animation: vng-engineer-glitch-shift 220ms steps(2, end) infinite;
+}
+
 .vng-panel-header,
 .vng-retro-panel__hero,
 .vng-terminal-panel .vng-panel-header {

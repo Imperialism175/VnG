@@ -20,7 +20,6 @@ export function SegmentedHpBar({ current, max }: SegmentedHpBarProps) {
       aria-valuemax={max}
       aria-label={`${current} из ${max}`}
     >
-      <span className="text-vng-muted">HP </span>
       <span className="vng-hp-text__bar">[{bar}]</span>{' '}
       <span className="vng-mono">
         {current}/{max}

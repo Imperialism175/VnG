@@ -88,6 +88,31 @@ function isInventoryLikeField(name: string): boolean {
   return normalized === 'инвентарь' || normalized.includes('мешочек') || normalized === 'кпк'
 }
 
+function getTextFieldMaxLength(
+  presetId: SheetPresetId | null,
+  fieldName: string
+): number | null {
+  const normalized = String(fieldName ?? '').trim().toLowerCase()
+  if (presetId === 'engineer' && (normalized === 'кпк' || normalized === 'инвентарь')) return 45
+  if (presetId === 'overcomer' && normalized === 'кузница вдохновения') return 25
+  if (isInventoryLikeField(fieldName)) return 30
+  return null
+}
+
+function isEnergyStat(name: string): boolean {
+  return String(name ?? '').trim().toLowerCase() === 'энергия'
+}
+
+function isEnergyCounter(name: string): boolean {
+  return String(name ?? '').trim().toLowerCase() === 'энергия'
+}
+
+function toRoundedNumberOrNull(value: string): number | null {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return Math.round(n)
+}
+
 function parseAbilityLevels(value: string): Record<number, string> {
   const result: Record<number, string> = { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '' }
   const src = String(value ?? '')
@@ -176,46 +201,97 @@ export function CharacterSheet({
 
   function updateStat(id: string, patch: Partial<StatField>) {
     if (statPointsLocked && !gmEditing) return
+    const isDaredevil = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status) === 'daredevil'
+    const prevStat = local.stats.find((s) => s.id === id)
     const nextStats = local.stats.map((s) => (s.id === id ? { ...s, ...patch } : s))
     const updatedStat = nextStats.find((s) => s.id === id)
-    if (!updatedStat || !isHpStat(updatedStat.name) || patch.value === undefined) {
-      scheduleSave({
-        ...local,
-        stats: nextStats,
-      })
-      return
+    if (!updatedStat) return
+    let finalStats = nextStats
+    let finalCounters = [...local.counters]
+    const roundedPrev = prevStat ? toRoundedNumberOrNull(prevStat.value) : null
+    const roundedNext = patch.value === undefined ? null : toRoundedNumberOrNull(updatedStat.value)
+    const pointsIdx = finalCounters.findIndex((c) => isSkillPointCounter(c.name))
+
+    if (patch.value !== undefined && roundedPrev !== null && roundedNext !== null && pointsIdx >= 0) {
+      const pointsCounter = finalCounters[pointsIdx]
+      const maxPoints = Math.max(0, Math.round(Number(pointsCounter.max) || 0))
+      const prevValueForPoints = isHpStat(updatedStat.name) ? Math.max(0, roundedPrev) : roundedPrev
+      let targetValueForPoints = isHpStat(updatedStat.name) ? Math.max(0, roundedNext) : roundedNext
+      const delta = targetValueForPoints - prevValueForPoints
+
+      if (delta > 0) {
+        const spendable = Math.max(0, Math.round(Number(pointsCounter.current) || 0))
+        if (delta > spendable) {
+          targetValueForPoints = prevValueForPoints + spendable
+        }
+      }
+
+      const pointsDelta = targetValueForPoints - prevValueForPoints
+      const nextPointsCurrent = Math.min(
+        maxPoints,
+        Math.max(0, Math.round(Number(pointsCounter.current) || 0) - pointsDelta)
+      )
+
+      finalCounters = finalCounters.map((c, i) =>
+        i === pointsIdx ? { ...c, current: nextPointsCurrent } : c
+      )
+      finalStats = finalStats.map((s) =>
+        s.id === id ? { ...s, value: String(targetValueForPoints) } : s
+      )
     }
-    const hpSpent = Number(updatedStat.value)
-    if (!Number.isFinite(hpSpent)) {
-      scheduleSave({
-        ...local,
-        stats: nextStats,
-      })
-      return
+
+    const patchedStat = finalStats.find((s) => s.id === id)
+    if (patchedStat && isDaredevil && isHpStat(patchedStat.name)) {
+      finalStats = finalStats.map((s) => (s.id === id ? { ...s, value: '1' } : s))
+      const hpIdx = finalCounters.findIndex((c) => isHealthCounter(c.name))
+      if (hpIdx >= 0) {
+        finalCounters = finalCounters.map((c, i) => (i === hpIdx ? { ...c, current: 1, max: 1 } : c))
+      }
     }
-    const normalizedSpent = Math.max(0, Math.round(hpSpent))
-    const hpMax = computeMaxHpBySpentPoints(
-      normalizedSpent,
-      local.sheet_preset_id ?? null,
-      local.class_status,
-      HP_BASE_VALUE
-    )
-    const hpIdx = local.counters.findIndex((c) => isHealthCounter(c.name))
-    if (hpIdx < 0) {
-      scheduleSave({
-        ...local,
-        stats: nextStats.map((s) => (s.id === id ? { ...s, value: String(normalizedSpent) } : s)),
-      })
-      return
+    if (!isDaredevil && patchedStat && isHpStat(patchedStat.name) && patch.value !== undefined) {
+      const hpSpent = Number(patchedStat.value)
+      if (Number.isFinite(hpSpent)) {
+        const normalizedSpent = Math.max(0, Math.round(hpSpent))
+        const hpMax = computeMaxHpBySpentPoints(
+          normalizedSpent,
+          local.sheet_preset_id ?? null,
+          local.class_status,
+          HP_BASE_VALUE
+        )
+        const hpIdx = finalCounters.findIndex((c) => isHealthCounter(c.name))
+        finalStats = finalStats.map((s) => (s.id === id ? { ...s, value: String(normalizedSpent) } : s))
+        if (hpIdx >= 0) {
+          finalCounters = finalCounters.map((c, i) =>
+            i === hpIdx
+              ? { ...c, max: hpMax, current: Math.min(c.current, hpMax) }
+              : c
+          )
+        }
+      }
     }
+
+    const isMolchun = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status) === 'molchun'
+    if (isMolchun) {
+      const energyStat = finalStats.find((s) => isEnergyStat(s.name))
+      if (energyStat) {
+        const energyMax = Math.max(0, Math.round(Number(energyStat.value) || 0))
+        const energyCounterIdx = finalCounters.findIndex((c) => isEnergyCounter(c.name))
+        if (energyCounterIdx >= 0) {
+          finalCounters = finalCounters.map((c, i) =>
+            i === energyCounterIdx
+              ? { ...c, max: energyMax, current: Math.min(c.current, energyMax) }
+              : c
+          )
+        } else {
+          finalCounters = [...finalCounters, { id: generateId(), name: 'Энергия', current: energyMax, max: energyMax }]
+        }
+      }
+    }
+
     scheduleSave({
       ...local,
-      stats: nextStats.map((s) => (s.id === id ? { ...s, value: String(normalizedSpent) } : s)),
-      counters: local.counters.map((c, i) =>
-        i === hpIdx
-          ? { ...c, max: hpMax, current: Math.min(c.current, hpMax) }
-          : c
-      ),
+      stats: finalStats,
+      counters: finalCounters,
     })
   }
 
@@ -229,8 +305,12 @@ export function CharacterSheet({
   }
 
   function updateCounter(id: string, patch: Partial<CounterField>) {
+    const isDaredevil = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status) === 'daredevil'
     const nextCounters = local.counters.map((c) => {
       if (c.id !== id) return c
+      if (isDaredevil && isHealthCounter(c.name)) {
+        return { ...c, current: 1, max: 1 }
+      }
       const rawCurrent = patch.current ?? c.current
       const rawMax = patch.max ?? c.max
       const safeMax = Math.max(1, Math.round(Number(rawMax) || 1))
@@ -259,17 +339,18 @@ export function CharacterSheet({
 
   function spendSkillPointOnStat(statId: string, delta: 1 | -1) {
     if (statPointsLocked && !gmEditing) return
+    const isDaredevil = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status) === 'daredevil'
     const pointsIdx = local.counters.findIndex((c) => isSkillPointCounter(c.name))
     if (pointsIdx < 0) return
     const hpIdx = local.counters.findIndex((c) => isHealthCounter(c.name))
     const pointsCounter = local.counters[pointsIdx]
     const stat = local.stats.find((s) => s.id === statId)
     if (!stat) return
+    if (isDaredevil && isHpStat(stat.name)) return
 
     const currentStat = Number(stat.value)
     if (!Number.isFinite(currentStat)) return
     if (delta === 1 && pointsCounter.current <= 0) return
-    if (delta === -1 && currentStat <= 0) return
 
     if (isHpStat(stat.name) && hpIdx >= 0) {
       const currentSpent = Math.max(0, Math.round(currentStat))
@@ -295,14 +376,31 @@ export function CharacterSheet({
       return
     }
 
+    let nextCounters = local.counters.map((c, i) =>
+      i === pointsIdx ? { ...c, current: Math.max(0, c.current - delta) } : c
+    )
+    const nextStats = local.stats.map((s) =>
+      s.id === statId ? { ...s, value: String(currentStat + delta) } : s
+    )
+    const isMolchun = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status) === 'molchun'
+    if (isMolchun) {
+      const energyStat = nextStats.find((s) => isEnergyStat(s.name))
+      if (energyStat) {
+        const energyMax = Math.max(0, Math.round(Number(energyStat.value) || 0))
+        const energyCounterIdx = nextCounters.findIndex((c) => isEnergyCounter(c.name))
+        if (energyCounterIdx >= 0) {
+          nextCounters = nextCounters.map((c, i) =>
+            i === energyCounterIdx
+              ? { ...c, max: energyMax, current: Math.min(c.current, energyMax) }
+              : c
+          )
+        }
+      }
+    }
     scheduleSave({
       ...local,
-      counters: local.counters.map((c, i) =>
-        i === pointsIdx ? { ...c, current: Math.max(0, c.current - delta) } : c
-      ),
-      stats: local.stats.map((s) =>
-        s.id === statId ? { ...s, value: String(Math.max(0, currentStat + delta)) } : s
-      ),
+      counters: nextCounters,
+      stats: nextStats,
     })
   }
 
@@ -327,14 +425,15 @@ export function CharacterSheet({
 
   function updateTextField(id: string, patch: Partial<TextField>) {
     if (specialFieldLocks.has(id) && !gmEditing) return
+    const currentPresetId = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status)
     scheduleSave({
       ...local,
       text_fields: (local.text_fields ?? []).map((f) => {
         if (f.id !== id) return f
         let nextPatch = patch
-        const inventoryLikeField = isInventoryLikeField(f.name)
-        if (inventoryLikeField && typeof patch.value === 'string') {
-          nextPatch = { ...patch, value: patch.value.slice(0, 30) }
+        const maxLen = getTextFieldMaxLength(currentPresetId, f.name)
+        if (maxLen !== null && typeof patch.value === 'string') {
+          nextPatch = { ...patch, value: patch.value.slice(0, maxLen) }
         }
         return { ...f, ...nextPatch }
       }),
@@ -366,6 +465,13 @@ export function CharacterSheet({
   const thresholdRows = getThresholdEffectsForCharacter(local.sheet_preset_id ?? null, local.class_status)
   const thresholdDisplayRows = buildThresholdDisplayRows(thresholdRows, resolvedPresetId)
   const isPrettySheet = resolvedPresetId === 'pretty'
+  const engineerGlitchActive =
+    resolvedPresetId === 'engineer' &&
+    local.stats.some((stat) => {
+      const numeric = Number(stat.value)
+      if (!Number.isFinite(numeric)) return false
+      return getStatEffectForCharacterSheet(local.sheet_preset_id ?? null, local.class_status, numeric) === 'ошибка'
+    })
   const activePresetLabel =
     SHEET_PRESETS.find((preset) => preset.id === (local.sheet_preset_id as SheetPresetId | undefined))?.label ??
     null
@@ -381,7 +487,7 @@ export function CharacterSheet({
       }
       icon={<Scroll size={16} />}
       fillHeight
-      className="h-full min-h-0"
+      className={`h-full min-h-0 ${engineerGlitchActive ? 'vng-sheet-engineer-glitch' : ''}`}
       action={
         gmEditing ? (
           <span className="text-xs uppercase tracking-wide text-vng-amber font-semibold px-2 py-0.5 rounded bg-vng-amber/10">
@@ -495,7 +601,7 @@ export function CharacterSheet({
             {textFields.map((field) => {
               const fieldLocked = specialFieldLocks.has(field.id)
               const fieldReadOnly = viewOnly || (!gmEditing && fieldLocked)
-              const inventoryLikeField = isInventoryLikeField(field.name)
+              const fieldMaxLen = getTextFieldMaxLength(resolvedPresetId, field.name)
               return (
                 <div
                   key={field.id}
@@ -524,12 +630,23 @@ export function CharacterSheet({
                   )}
                   {!viewOnly && <span className="text-[10px] text-vng-muted">фиксировано</span>}
                 </div>
-                {isAbilitiesField(field.name) ? (
+                {isAbilitiesField(field.name) && resolvedPresetId !== 'daredevil' ? (
                   <AbilityLevelsTable
                     value={field.value}
                     readOnly={fieldReadOnly}
                     onChange={(next) => updateTextField(field.id, { value: next })}
                   />
+                ) : isAbilitiesField(field.name) && resolvedPresetId === 'daredevil' ? (
+                  fieldReadOnly ? (
+                    <p className="text-sm whitespace-pre-wrap text-vng-text/90">{field.value || '—'}</p>
+                  ) : (
+                    <textarea
+                      className="w-full min-h-[160px] px-2 py-2 text-sm rounded-lg bg-vng-elevated border border-vng-border focus:outline-none focus:border-vng-amber/50 resize-y"
+                      value={field.value}
+                      onChange={(e) => updateTextField(field.id, { value: e.target.value })}
+                      placeholder="Только уровни 7-1..7-6 и 20"
+                    />
+                  )
                 ) : fieldReadOnly ? (
                   <p className="text-sm whitespace-pre-wrap text-vng-text/90">{field.value || '—'}</p>
                 ) : (
@@ -537,12 +654,14 @@ export function CharacterSheet({
                     className="w-full min-h-[72px] px-2 py-2 text-sm rounded-lg bg-vng-elevated border border-vng-border focus:outline-none focus:border-vng-amber/50 resize-y"
                     value={field.value}
                     onChange={(e) => updateTextField(field.id, { value: e.target.value })}
-                    maxLength={inventoryLikeField ? 30 : undefined}
+                    maxLength={fieldMaxLen ?? undefined}
                     placeholder="Текст поля…"
                   />
                 )}
-                {inventoryLikeField && (
-                  <p className="text-[10px] text-vng-muted">Лимит: 30 символов ({field.value.length}/30)</p>
+                {fieldMaxLen !== null && (
+                  <p className="text-[10px] text-vng-muted">
+                    Лимит: {fieldMaxLen} символов ({field.value.length}/{fieldMaxLen})
+                  </p>
                 )}
                 {!gmEditing && fieldLocked && (
                   <p className="text-[10px] text-vng-muted">Поле заблокировано ГМ</p>
@@ -590,7 +709,7 @@ export function CharacterSheet({
               ? local.counters.filter((c) => isHealthCounter(c.name)).length === 0
               : local.counters.length === 0) && (
               <p className="text-xs text-vng-muted text-center py-2">
-                {restrictedView ? 'HP не указано' : 'Нет счётчиков'}
+                {restrictedView ? 'Здоровье не указано' : 'Нет счётчиков'}
               </p>
             )}
           </div>
@@ -798,7 +917,7 @@ function CounterRow({
         )}
       </div>
       {hpLocked && (
-        <p className="text-xs text-vng-muted mb-1">HP меняет только мастер игры</p>
+        <p className="text-xs text-vng-muted mb-1">Здоровье меняет только мастер игры</p>
       )}
       {inspirationLocked && (
         <p className="text-xs text-vng-muted mb-1">Очки вдохновения выдаёт только ГМ</p>

@@ -106,6 +106,7 @@ function withBase(base: Character, opts?: {
   extraStats?: StatField[]
   extraCounters?: CounterField[]
   textOverrides?: Record<string, string>
+  textValues?: Record<string, string>
   extraText?: TextField[]
   classStatus?: string
   descriptionAppend?: string
@@ -129,6 +130,13 @@ function withBase(base: Character, opts?: {
     for (const field of text) {
       if (opts.textOverrides[field.name] !== undefined) {
         field.name = opts.textOverrides[field.name] ?? field.name
+      }
+    }
+  }
+  if (opts?.textValues) {
+    for (const field of text) {
+      if (opts.textValues[field.name] !== undefined) {
+        field.value = opts.textValues[field.name] ?? field.value
       }
     }
   }
@@ -318,8 +326,8 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
       withBase(base, {
         classStatus: 'Листок Молчуна',
         skillPoints: 25,
-        extraStats: [stat('ЭНЕРГИЯ', '10')],
-        extraCounters: [counter('Энергия', 10, 10)],
+        extraStats: [stat('ЭНЕРГИЯ', '0')],
+        extraCounters: [counter('Энергия', 0, 0)],
         extraText: [
           textField(
             'Правило листика',
@@ -378,7 +386,8 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
       withBase(base, {
         classStatus: 'Листок Инженера',
         skillPoints: 27,
-        extraText: [textField('КПК', ''), textField('Очки на характеристики', '27')],
+        textOverrides: { Инвентарь: 'КПК' },
+        extraText: [textField('Очки на характеристики', '27')],
       }),
   },
   {
@@ -393,6 +402,17 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
         classStatus: 'Лист Сорвиголовы',
         skillPoints: 23,
         extraStats: [stat('УРОВЕНЬ', '20')],
+        textValues: {
+          Инвентарь: '✚',
+          Способности:
+            'Уровень 7-1:\n\n' +
+            'Уровень 7-2:\n\n' +
+            'Уровень 7-3:\n\n' +
+            'Уровень 7-4:\n\n' +
+            'Уровень 7-5:\n\n' +
+            'Уровень 7-6:\n\n' +
+            'Уровень 20:\n',
+        },
         extraText: [
           textField('Правило листика', 'Уровни листа: 1 (7) и 20. Выживание на 1 ХП.'),
           textField('Очки на характеристики', '23'),
@@ -521,6 +541,7 @@ export function ensureSpecialTextFields(textFields: TextField[] | undefined): Te
 
 function ensureAbilityLevelsTemplate(text: string): string {
   const src = String(text ?? '')
+  if (/ур(?:овень)?\s*20/i.test(src) || /ур(?:овень)?\s*7-1/i.test(src)) return src
   if (/ур(?:овень)?\s*1/i.test(src) || /\blvl\s*1\b/i.test(src)) return src
   const prefix = src ? `${src}\n\n` : ''
   return `${prefix}Уровень 1: \nУровень 2: \nУровень 3: \nУровень 4: \nУровень 5: \nУровень 6: \nУровень 7: `

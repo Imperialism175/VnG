@@ -1,15 +1,16 @@
 import type { LucideIcon } from 'lucide-react'
-import { Eye, Heart, Scroll, Shield, Sword } from 'lucide-react'
+import { Clover, Heart, PersonStanding, Scroll, Smile, Sword } from 'lucide-react'
 
 const RULES: { icon: LucideIcon; patterns: RegExp[] }[] = [
-  { icon: Sword, patterns: [/сил|атак|меч|str|attack|dmg|урон/i] },
-  { icon: Shield, patterns: [/защ|брон|щит|def|armor|ac|кб/i] },
   { icon: Heart, patterns: [/здор|хп|hp|выно|con|жиз|стам/i] },
-  { icon: Eye, patterns: [/мудр|вним|воспр|wis|per|инту|ловк|dex/i] },
-  { icon: Scroll, patterns: [/инт|маг|знан|int|arc|лор|хариз|cha/i] },
+  { icon: Sword, patterns: [/сил|атак|меч|str|attack|dmg|урон/i] },
+  { icon: PersonStanding, patterns: [/ловк|dex|бег|скорост|уклон/i] },
+  { icon: Smile, patterns: [/хариз|cha|обаян|smile/i] },
+  { icon: Scroll, patterns: [/инт|маг|знан|int|arc|лор|свиток/i] },
+  { icon: Clover, patterns: [/удач|luck|фортун/i] },
 ]
 
-const FALLBACK: LucideIcon[] = [Sword, Shield, Scroll, Eye, Heart]
+const FALLBACK: LucideIcon[] = [Heart, Sword, PersonStanding, Smile, Scroll, Clover]
 
 export function pickStatIcon(name: string, index: number): LucideIcon {
   const n = name.trim()
