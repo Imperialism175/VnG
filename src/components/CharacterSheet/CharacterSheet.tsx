@@ -13,6 +13,7 @@ import {
   getThresholdEffectsForCharacter,
   isSkillPointCounter,
   isResearcherSheet,
+  SKILL_POINTS_COUNTER_NAME,
   resolveCharacterPresetId,
   SHEET_PRESETS,
   type StatEffectValue,
@@ -312,7 +313,7 @@ export function CharacterSheet({
       if (delta < 0) return
       scheduleSave({
         ...local,
-        counters: [...local.counters, { id: generateId(), name: 'Очки характеристик', current: 1, max: 999 }],
+        counters: [...local.counters, { id: generateId(), name: SKILL_POINTS_COUNTER_NAME, current: 1, max: 999 }],
       })
       return
     }
