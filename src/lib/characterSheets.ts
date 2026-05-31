@@ -12,6 +12,7 @@ export const DEFAULT_STATS = [
 
 export type SheetPresetId =
   | 'classic'
+  | 'characteristic-sheet'
   | 'friendship'
   | 'interleaf'
   | 'core-sheet'
@@ -169,6 +170,39 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
         classStatus: 'Классический листик',
         skillPoints: 27,
       }),
+  },
+  {
+    id: 'characteristic-sheet',
+    label: 'Характеристический лист',
+    points: '27 очков',
+    pointsValue: 27,
+    notes:
+      '5 активных характеристик и 2 запасных. За действие можно поменять одну запасную с активной.',
+    apply: (base) => {
+      const prepared = withBase(base, {
+        classStatus: 'Характеристический лист',
+        skillPoints: 27,
+        extraText: [
+          textField(
+            'Правило листика',
+            'У вас 5 активных характеристик и 2 запасных. По кнопке можно поменять местами запасную и активную.'
+          ),
+          textField('Очки на характеристики', '27'),
+        ],
+      })
+      return {
+        ...prepared,
+        stats: [
+          stat('Характеристика 1', '0'),
+          stat('Характеристика 2', '0'),
+          stat('Характеристика 3', '0'),
+          stat('Характеристика 4', '0'),
+          stat('Характеристика 5', '0'),
+          stat('Запас 1', '0'),
+          stat('Запас 2', '0'),
+        ],
+      }
+    },
   },
   {
     id: 'friendship',
@@ -716,6 +750,7 @@ function getClassicEffect(statValue: number): StatEffectValue | null {
 
 const TABLES: Partial<Record<SheetPresetId, ThresholdTable>> = {
   classic: table([]),
+  'characteristic-sheet': table([]),
   friendship: table([]),
   interleaf: table([]),
   condemned: table([
@@ -770,6 +805,7 @@ function normalizePresetIdByClassStatus(classStatus: string): SheetPresetId | nu
   const preset = SHEET_PRESETS.find((p) => p.label.toLowerCase() === value)
   if (preset) return preset.id
   if (value.includes('классичес')) return 'classic'
+  if (value.includes('характеристичес')) return 'characteristic-sheet'
   if (value.includes('междулист') || value.includes('междудист')) return 'interleaf'
   if (value.includes('дружб')) return 'friendship'
   if (value.includes('приговор')) return 'condemned'

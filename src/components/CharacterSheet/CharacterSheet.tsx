@@ -525,6 +525,7 @@ export function CharacterSheet({
   const [local, setLocal] = useState(character)
   const [showThresholdTable, setShowThresholdTable] = useState(false)
   const [rotationStep, setRotationStep] = useState<0 | 1 | 2>(0)
+  const [swapTargets, setSwapTargets] = useState<Record<string, string>>({})
   const [calculatorInput, setCalculatorInput] = useState('')
   const [calculatorResult, setCalculatorResult] = useState('')
   const [calculatorError, setCalculatorError] = useState('')
@@ -961,12 +962,31 @@ export function CharacterSheet({
     })
   }
 
+  function swapCharacteristicWithReserve(reserveStatId: string, activeStatId: string) {
+    if (statPointsLocked && !gmEditing) return
+    const reserveIdx = local.stats.findIndex((s) => s.id === reserveStatId)
+    const activeIdx = local.stats.findIndex((s) => s.id === activeStatId)
+    if (reserveIdx < 0 || activeIdx < 0) return
+    const isCharacteristicSheet =
+      resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status) === 'characteristic-sheet'
+    if (!isCharacteristicSheet) return
+    if (activeIdx > 4 || reserveIdx < 5 || reserveIdx > 6) return
+    const nextStats = [...local.stats]
+    const tmp = nextStats[activeIdx]
+    nextStats[activeIdx] = nextStats[reserveIdx]
+    nextStats[reserveIdx] = tmp
+    scheduleSave({ ...local, stats: nextStats })
+  }
+
   const textFields = local.text_fields ?? []
   const templateSelected = Boolean(local.sheet_preset_id)
   const resolvedPresetId = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status)
   const thresholdRows = getThresholdEffectsForCharacter(local.sheet_preset_id ?? null, local.class_status)
   const thresholdDisplayRows = buildThresholdDisplayRows(thresholdRows, resolvedPresetId)
   const isPrettySheet = resolvedPresetId === 'pretty'
+  const isCharacteristicSheet = resolvedPresetId === 'characteristic-sheet'
+  const activeStats = isCharacteristicSheet ? local.stats.slice(0, 5) : local.stats
+  const reserveStats = isCharacteristicSheet ? local.stats.slice(5, 7) : []
   const engineerGlitchActive =
     resolvedPresetId === 'engineer' &&
     local.stats.some((stat) => {
@@ -1371,7 +1391,7 @@ export function CharacterSheet({
             )
           })()}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {local.stats.map((stat, index) => (
+            {activeStats.map((stat, index) => (
               <StatRow
                 key={stat.id}
                 stat={stat}
@@ -1387,10 +1407,61 @@ export function CharacterSheet({
                 onSpendPoint={(d) => spendSkillPointOnStat(stat.id, d)}
               />
             ))}
-            {local.stats.length === 0 && (
+            {activeStats.length === 0 && (
               <p className="text-xs text-vng-muted text-center py-2 col-span-full">Нет характеристик</p>
             )}
           </div>
+          {isCharacteristicSheet && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-vng-muted uppercase tracking-[0.08em]">Запасные характеристики</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {reserveStats.map((reserve, idx) => {
+                  const selectedActiveId = swapTargets[reserve.id] ?? activeStats[0]?.id ?? ''
+                  return (
+                    <div key={reserve.id} className="rounded border border-vng-border/70 p-2 space-y-2">
+                      <StatRow
+                        stat={reserve}
+                        classStatus={local.class_status}
+                        sheetPresetId={local.sheet_preset_id ?? null}
+                        index={idx + 5}
+                        readOnly={!canEdit || (!gmEditing && statPointsLocked)}
+                        canSpend={false}
+                        researcherMode={researcherMode}
+                        canSetInfinity={canEdit && researcherMode}
+                        onUpdate={(p) => updateStat(reserve.id, p)}
+                        onRemove={() => removeStat(reserve.id)}
+                      />
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="vng-tui-input"
+                          value={selectedActiveId}
+                          onChange={(e) =>
+                            setSwapTargets((prev) => ({ ...prev, [reserve.id]: e.target.value }))
+                          }
+                          disabled={!canEdit || activeStats.length === 0}
+                        >
+                          {activeStats.map((active) => (
+                            <option key={active.id} value={active.id}>
+                              {active.name}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={!canEdit || !selectedActiveId}
+                          onClick={() => swapCharacteristicWithReserve(reserve.id, selectedActiveId)}
+                        >
+                          Поменять
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <div className="mt-3 rounded-lg border border-vng-border/80 bg-vng-bg/60 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-vng-muted mb-2">Калькулятор</p>
             <div className="flex items-center gap-2">
