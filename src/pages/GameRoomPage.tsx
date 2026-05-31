@@ -273,6 +273,26 @@ function GameRoomContent() {
     inspirationPoints: myCharacter?.counters.find((c) => /вдох|inspir/i.test(c.name))?.current ?? 0,
     wandererMode:
       resolveCharacterPresetId(myCharacter?.sheet_preset_id ?? null, myCharacter?.class_status ?? '') === 'wanderer',
+    gmScaleProfiles: session.isGm
+      ? characters
+          .filter((c) => Boolean(c.is_npc))
+          .map((c) => ({
+            id: c.player_id,
+            label: `НПС: ${c.name?.trim() || c.player_name || c.player_id}`,
+            statOptions: c.stats.map((s) => s.name).filter(Boolean),
+            statValues: Object.fromEntries(c.stats.map((s) => [s.name, s.value])),
+            statScaleValues: Object.fromEntries(
+              c.stats.map((s) => {
+                const statRaw = Number(s.value)
+                const effect = Number.isFinite(statRaw)
+                  ? getStatEffectForCharacterSheet(c.sheet_preset_id ?? null, c.class_status ?? '', statRaw)
+                  : null
+                return [s.name, typeof effect === 'number' && Number.isFinite(effect) ? effect : 0]
+              })
+            ),
+            wandererMode: resolveCharacterPresetId(c.sheet_preset_id ?? null, c.class_status ?? '') === 'wanderer',
+          }))
+      : [],
     onReroll: session.isGm
       ? undefined
       : (opts: { count: number; sides: number; modifier: number }) => {

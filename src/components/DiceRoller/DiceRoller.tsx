@@ -28,6 +28,14 @@ interface DiceRollerProps {
   isGm?: boolean
   inspirationPoints?: number
   wandererMode?: boolean
+  gmScaleProfiles?: Array<{
+    id: string
+    label: string
+    statOptions: string[]
+    statValues: Record<string, string>
+    statScaleValues: Record<string, number>
+    wandererMode?: boolean
+  }>
 }
 
 interface RollDisplay {
@@ -66,6 +74,7 @@ export function DiceRoller({
   isGm = false,
   inspirationPoints = 0,
   wandererMode = false,
+  gmScaleProfiles = [],
 }: DiceRollerProps) {
   const [selectedSides, setSelectedSides] = useState<DiceSides>(20)
   const [diceCount, setDiceCount] = useState(1)
@@ -77,6 +86,32 @@ export function DiceRoller({
   const [scaleStatName, setScaleStatName] = useState<string>('')
   const [scaleStatValue, setScaleStatValue] = useState<number | null>(null)
   const [desiredAbilityLevel, setDesiredAbilityLevel] = useState<string>('')
+  const [gmProfileId, setGmProfileId] = useState<string>('')
+  const selectedGmProfile = isGm ? gmScaleProfiles.find((p) => p.id === gmProfileId) ?? null : null
+  const effectiveStatOptions = selectedGmProfile?.statOptions ?? statOptions
+  const effectiveStatValues = selectedGmProfile?.statValues ?? statValues
+  const effectiveStatScaleValues = selectedGmProfile?.statScaleValues ?? statScaleValues
+  const effectiveWandererMode = selectedGmProfile?.wandererMode ?? wandererMode
+
+  useEffect(() => {
+    if (!isGm) return
+    if (!gmScaleProfiles.length) {
+      if (gmProfileId) setGmProfileId('')
+      return
+    }
+    if (!gmScaleProfiles.some((p) => p.id === gmProfileId)) {
+      setGmProfileId(gmScaleProfiles[0]?.id ?? '')
+    }
+  }, [isGm, gmScaleProfiles, gmProfileId])
+
+  useEffect(() => {
+    if (!scaleStatName) return
+    if (!effectiveStatOptions.includes(scaleStatName)) {
+      setScaleStatName('')
+      setScaleStatValue(null)
+    }
+  }, [effectiveStatOptions, scaleStatName])
+
 
   const pendingRef = useRef(false)
   const rollStartedAt = useRef(0)
@@ -176,7 +211,7 @@ export function DiceRoller({
   const mod = display?.modifier ?? (scaleStatValue ?? 0)
   const total = display?.total
   const readoutExpression =
-    selectedSides === 20 && wandererMode
+    selectedSides === 20 && effectiveWandererMode
       ? `${diceCount} × (d5 + d12)`
       : `${diceCount}d${selectedSides}`
 
@@ -185,15 +220,15 @@ export function DiceRoller({
       setScaleStatValue(null)
       return
     }
-    const raw = statValues[scaleStatName]
-    const thresholdEffect = statScaleValues[scaleStatName]
+    const raw = effectiveStatValues[scaleStatName]
+    const thresholdEffect = effectiveStatScaleValues[scaleStatName]
     if (Number.isFinite(thresholdEffect)) {
       setScaleStatValue(thresholdEffect)
       return
     }
     const parsed = Number(raw)
     setScaleStatValue(Number.isFinite(parsed) ? parsed : 0)
-  }, [scaleStatName, statScaleValues, statValues])
+  }, [scaleStatName, effectiveStatScaleValues, effectiveStatValues])
 
   useEffect(() => {
     if (selectedSides !== 20 && desiredAbilityLevel) {
@@ -211,7 +246,7 @@ export function DiceRoller({
           <div className="grid grid-cols-4 gap-2">
             {DICE_TYPES.map(({ label, sides }) => {
               const active = selectedSides === sides
-              const renderedLabel = sides === 20 && wandererMode ? 'Д5 + Д12' : label
+              const renderedLabel = sides === 20 && effectiveWandererMode ? 'Д5 + Д12' : label
               return (
                 <button
                   key={sides}
@@ -251,6 +286,23 @@ export function DiceRoller({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {isGm && gmScaleProfiles.length > 0 && (
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="text-xs text-vng-muted uppercase tracking-[0.08em]">Бросок за НПС</span>
+              <select
+                className="vng-tui-input"
+                value={gmProfileId}
+                onChange={(e) => setGmProfileId(e.target.value)}
+                disabled={rolling}
+              >
+                {gmScaleProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="flex flex-col gap-1.5">
             <span className="text-xs text-vng-muted uppercase tracking-[0.08em]">Скейл от стата</span>
             <select
@@ -260,7 +312,7 @@ export function DiceRoller({
               disabled={rolling}
             >
               <option value="">Без скейла</option>
-              {statOptions.map((name) => (
+              {effectiveStatOptions.map((name) => (
                 <option key={name} value={name}>
                   {name}
                 </option>
