@@ -8,6 +8,7 @@ interface GmPlayerSheetsProps {
   characters: Character[]
   onSave: (character: Character) => void
   onCreateNpc: (name: string) => void
+  onDeleteNpc: (playerId: string) => void
 }
 
 type RosterEntry = {
@@ -22,6 +23,7 @@ export function GmPlayerSheets({
   characters,
   onSave,
   onCreateNpc,
+  onDeleteNpc,
 }: GmPlayerSheetsProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [npcName, setNpcName] = useState('')
@@ -60,6 +62,15 @@ export function GmPlayerSheets({
     const nextName = npcName.trim() || 'НПС'
     onCreateNpc(nextName)
     setNpcName('')
+  }
+
+  function handleDeleteNpc() {
+    if (!active?.character || !active.isNpc) return
+    const name = active.character.name?.trim() || active.label || 'НПС'
+    const ok = window.confirm(`Удалить лист НПС "${name}" безвозвратно?`)
+    if (!ok) return
+    onDeleteNpc(active.character.player_id)
+    setSelectedId(null)
   }
 
   if (roster.length === 0) {
@@ -129,14 +140,21 @@ export function GmPlayerSheets({
             <p className="text-xs text-vng-muted">
               Режим просмотра: {viewAsCharacter ? 'Эмуляция владельца листа' : 'ГМ'}
             </p>
-            <Button
-              type="button"
-              size="sm"
-              variant={viewAsCharacter ? 'secondary' : 'ghost'}
-              onClick={() => setViewAsCharacter((v) => !v)}
-            >
-              {viewAsCharacter ? 'Режим ГМ' : 'От лица игрока/персонажа'}
-            </Button>
+            <div className="flex items-center gap-2">
+              {active.isNpc && (
+                <Button type="button" size="sm" variant="danger" onClick={handleDeleteNpc}>
+                  Удалить НПС
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant={viewAsCharacter ? 'secondary' : 'ghost'}
+                onClick={() => setViewAsCharacter((v) => !v)}
+              >
+                {viewAsCharacter ? 'Режим ГМ' : 'От лица игрока/персонажа'}
+              </Button>
+            </div>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto">
             <CharacterSheet
