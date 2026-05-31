@@ -127,7 +127,7 @@ export function GmPlayerSheets({
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs text-vng-muted">
-              Режим просмотра: {viewAsCharacter ? 'От лица персонажа' : 'ГМ'}
+              Режим просмотра: {viewAsCharacter ? 'Эмуляция владельца листа' : 'ГМ'}
             </p>
             <Button
               type="button"
@@ -135,7 +135,7 @@ export function GmPlayerSheets({
               variant={viewAsCharacter ? 'secondary' : 'ghost'}
               onClick={() => setViewAsCharacter((v) => !v)}
             >
-              {viewAsCharacter ? 'Режим ГМ' : 'От лица персонажа'}
+              {viewAsCharacter ? 'Режим ГМ' : 'От лица игрока/персонажа'}
             </Button>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto">
@@ -144,7 +144,8 @@ export function GmPlayerSheets({
               character={active.character}
               onChange={onSave}
               gmEditing={!viewAsCharacter}
-              readOnly={viewAsCharacter}
+              readOnly={false}
+              restrictedView={false}
             />
           </div>
         </div>
