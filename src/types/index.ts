@@ -32,6 +32,8 @@ export interface Character {
   special_field_locks?: string[]
   /** Запрет владельцу вкладывать очки характеристик и менять статы */
   stat_points_locked?: boolean
+  /** Запрет владельцу менять выбранный шаблон листика */
+  sheet_preset_locked?: boolean
   stats: StatField[]
   counters: CounterField[]
   /** Лист NPC/персонажа без игрока в сети — создаёт ГМ */

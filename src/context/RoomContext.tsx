@@ -122,6 +122,7 @@ export function createEmptyCharacter(roomId: string, playerId: string, playerNam
     text_fields: ensureSpecialTextFields([]),
     special_field_locks: [],
     stat_points_locked: false,
+    sheet_preset_locked: false,
     stats: [
       { id: generateId(), name: 'ХП', value: '0' },
       { id: generateId(), name: 'СИЛА', value: '0' },

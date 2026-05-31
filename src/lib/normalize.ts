@@ -116,6 +116,7 @@ export function normalizeCharacter(raw: Record<string, unknown>): Character {
       ? ((raw.special_field_locks ?? raw.specialFieldLocks) as unknown[]).map((v) => String(v))
       : [],
     stat_points_locked: Boolean(raw.stat_points_locked ?? raw.statPointsLocked),
+    sheet_preset_locked: Boolean(raw.sheet_preset_locked ?? raw.sheetPresetLocked),
     stats: (raw.stats ?? []) as StatField[],
     counters: (raw.counters ?? []) as CounterField[],
     is_npc: Boolean(raw.is_npc ?? raw.isNpc) || String(raw.player_id ?? raw.playerId ?? '').startsWith('npc-'),

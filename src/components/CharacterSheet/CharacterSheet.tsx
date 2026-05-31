@@ -359,6 +359,7 @@ export function CharacterSheet({
   const researcherMode = isResearcherSheet(local.sheet_preset_id ?? null, local.class_status)
   const specialFieldLocks = new Set(local.special_field_locks ?? [])
   const statPointsLocked = Boolean(local.stat_points_locked)
+  const sheetPresetLocked = Boolean(local.sheet_preset_locked)
 
   useEffect(() => {
     setLocal({
@@ -692,6 +693,14 @@ export function CharacterSheet({
     })
   }
 
+  function toggleSheetPresetLock() {
+    if (!gmEditing) return
+    scheduleSave({
+      ...local,
+      sheet_preset_locked: !sheetPresetLocked,
+    })
+  }
+
   const textFields = local.text_fields ?? []
   const templateSelected = Boolean(local.sheet_preset_id)
   const resolvedPresetId = resolveCharacterPresetId(local.sheet_preset_id ?? null, local.class_status)
@@ -734,15 +743,17 @@ export function CharacterSheet({
       className={`h-full min-h-0 ${engineerGlitchActive ? 'vng-sheet-engineer-glitch' : ''}`}
       action={
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="vng-tui-btn text-[10px]"
-            title="Повернуть лист"
-            onClick={() => setRotationStep((prev) => ((prev + 1) % 3) as 0 | 1 | 2)}
-          >
-            <RotateCw size={12} />
-            ПОВОРОТ {rotationLabel}
-          </button>
+          {resolvedPresetId === 'condemned' && (
+            <button
+              type="button"
+              className="vng-tui-btn text-[10px]"
+              title="Повернуть лист"
+              onClick={() => setRotationStep((prev) => ((prev + 1) % 3) as 0 | 1 | 2)}
+            >
+              <RotateCw size={12} />
+              ПОВОРОТ {rotationLabel}
+            </button>
+          )}
           {gmEditing && (
             <span className="text-xs uppercase tracking-wide text-vng-amber font-semibold px-2 py-0.5 rounded bg-vng-amber/10">
               Редактирует ГМ
@@ -751,7 +762,10 @@ export function CharacterSheet({
         </div>
       }
     >
-      <div className="relative h-full min-h-0 overflow-hidden" style={rotationStyle}>
+      <div
+        className="relative h-full min-h-0 overflow-hidden"
+        style={resolvedPresetId === 'condemned' ? rotationStyle : undefined}
+      >
         {isPrettySheet && (
           <>
             <pre
@@ -805,7 +819,9 @@ export function CharacterSheet({
                 <select
                   className="vng-tui-input"
                   defaultValue=""
+                  disabled={sheetPresetLocked && !gmEditing}
                   onChange={(e) => {
+                    if (sheetPresetLocked && !gmEditing) return
                     const id = e.target.value as SheetPresetId
                     if (!id) return
                     const keepClassStatus = local.class_status
@@ -824,6 +840,17 @@ export function CharacterSheet({
                     </option>
                   ))}
                 </select>
+                {gmEditing && (
+                  <button
+                    type="button"
+                    className={`vng-tui-btn text-[10px] ${sheetPresetLocked ? 'vng-tui-btn--active' : ''}`}
+                    onClick={toggleSheetPresetLock}
+                    title={sheetPresetLocked ? 'Разрешить игроку менять шаблон' : 'Запретить игроку менять шаблон'}
+                  >
+                    {sheetPresetLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                    {sheetPresetLocked ? 'ШАБЛОН ЗАКРЫТ' : 'ШАБЛОН ОТКРЫТ'}
+                  </button>
+                )}
               </div>
             </label>
             <p className="text-xs text-vng-amber mt-1">
