@@ -65,3 +65,32 @@ export function extractAbilitySlotsFromText(text) {
   }
   return levels.sort((a, b) => a - b)
 }
+
+export function extractAbilitySlotModesFromText(text) {
+  const src = String(text ?? '')
+  const base = []
+  const plus = []
+  const regex =
+    /(?:ур(?:овень)?\.?\s*|lvl\s*|level\s*)([1-7])(\+)?|([1-7])(\+)?\s*(?:ур(?:овень)?\.?|lvl|level)/gi
+  let m
+  while ((m = regex.exec(src)) !== null) {
+    const value = Number(m[1] ?? m[3] ?? 0)
+    const isPlus = Boolean(m[2] ?? m[4])
+    if (value < 1 || value > 7) continue
+    if (isPlus) {
+      if (!plus.includes(value)) plus.push(value)
+    } else if (!base.includes(value)) {
+      base.push(value)
+    }
+  }
+  for (let i = 1; i <= 7; i++) {
+    if (new RegExp(`(?:ур(?:овень)?\\.?\\s*|lvl\\s*|level\\s*)${i}\\+`, 'i').test(src) && !plus.includes(i)) {
+      plus.push(i)
+    }
+    if (!base.includes(i) && new RegExp(`(^|\\D)${i}(\\D|$)`).test(src)) base.push(i)
+  }
+  return {
+    base: base.sort((a, b) => a - b),
+    plus: plus.sort((a, b) => a - b),
+  }
+}

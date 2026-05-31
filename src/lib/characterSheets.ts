@@ -12,7 +12,10 @@ export const DEFAULT_STATS = [
 
 export type SheetPresetId =
   | 'classic'
+  | 'friendship'
+  | 'interleaf'
   | 'core-sheet'
+  | 'condemned'
   | 'npc-vessel-deltarune'
   | 'wanderer'
   | 'literature'
@@ -168,6 +171,59 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
       }),
   },
   {
+    id: 'friendship',
+    label: 'Лист Дружбы',
+    points: '27 очков',
+    pointsValue: 27,
+    notes: 'Нет удачи.',
+    apply: (base) => {
+      const prepared = withBase(base, {
+        classStatus: 'Лист Дружбы',
+        skillPoints: 27,
+      })
+      return {
+        ...prepared,
+        stats: prepared.stats.filter((s) => String(s.name ?? '').trim().toLowerCase() !== 'удача'),
+      }
+    },
+  },
+  {
+    id: 'interleaf',
+    label: 'Междулист',
+    points: '36 очков',
+    pointsValue: 36,
+    notes:
+      'Добавлены промежуточные уровни заклинаний с "+". Плюсовая версия срабатывает при остатке деления 1.',
+    apply: (base) =>
+      withBase(base, {
+        classStatus: 'Междулист',
+        skillPoints: 36,
+        textValues: {
+          Способности:
+            'Уровень 1:\n\n' +
+            'Уровень 1+:\n\n' +
+            'Уровень 2:\n\n' +
+            'Уровень 2+:\n\n' +
+            'Уровень 3:\n\n' +
+            'Уровень 3+:\n\n' +
+            'Уровень 4:\n\n' +
+            'Уровень 4+:\n\n' +
+            'Уровень 5:\n\n' +
+            'Уровень 5+:\n\n' +
+            'Уровень 6:\n\n' +
+            'Уровень 6+:\n\n' +
+            'Уровень 7:\n',
+        },
+        extraText: [
+          textField(
+            'Правило листика',
+            'Плюсовые уровни (например 2+) доступны между основными и выпадают, когда остаток деления броска на уровень равен 1.'
+          ),
+          textField('Очки на характеристики', '36'),
+        ],
+      }),
+  },
+  {
     id: 'core-sheet',
     label: 'Ядролист',
     points: 'спецправила',
@@ -177,7 +233,9 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
     apply: (base) =>
       withBase(base, {
         classStatus: 'Ядролист',
+        skillPoints: 27,
         extraStats: [stat('МАНИПУЛЯЦИЯ ЯДРОМ', '0')],
+        extraCounters: [counter('Подсказки', 0, 0)],
         extraText: [
           textField(
             'Правило листика',
@@ -187,6 +245,32 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
           textField('Ограничение', 'Каждая операция тратит ХОД'),
         ],
       }),
+  },
+  {
+    id: 'condemned',
+    label: 'Лист Приговоренного',
+    points: '7 очков',
+    pointsValue: 7,
+    notes:
+      'Только 4 характеристики: Сила, Здоровье, Ловкость, Любовь. Уровни заклинаний: 1-3, 6 и ∞.',
+    apply: (base) => {
+      const prepared = withBase(base, {
+        classStatus: 'Лист Приговоренного',
+        skillPoints: 7,
+        textValues: {
+          Способности:
+            'Уровень 1:\n\n' +
+            'Уровень 2:\n\n' +
+            'Уровень 3:\n\n' +
+            'Уровень 6:\n\n' +
+            'Уровень ∞:\n',
+        },
+      })
+      return {
+        ...prepared,
+        stats: [stat('СИЛА', '0'), stat('ЗДОРОВЬЕ', '0'), stat('ЛОВКОСТЬ', '0'), stat('ЛЮБОВЬ', '0')],
+      }
+    },
   },
   {
     id: 'npc-vessel-deltarune',
@@ -461,12 +545,11 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
     apply: (base) =>
       withBase(base, {
         classStatus: 'Листик Исследователя',
-        skillPoints: 0,
+        skillPoints: null,
         extraText: [
           textField('Нужные характеристики', '∞'),
           textField('Опциональные характеристики', '-∞'),
           textField('Правило листика', 'Нужность характеристик определяет ГМ.'),
-          textField('Очки на характеристики', '0'),
         ],
       }),
   },
@@ -593,6 +676,32 @@ function getAltKainaEffect(statValue: number): StatEffectValue | null {
   return -9 - (value - 23) * 2
 }
 
+function getInterleafEffect(statValue: number): StatEffectValue | null {
+  const value = Math.round(Number(statValue))
+  if (!Number.isFinite(value) || value < 1) return getClassicEffect(statValue)
+  const overrides: Record<number, number> = {
+    1: 3,
+    2: 2,
+    3: 1,
+    5: 3,
+    6: 5,
+    7: 2,
+    8: 1,
+    9: 0,
+    10: 2,
+    11: 1,
+    13: 1,
+    15: -1,
+    16: 8,
+    18: -2,
+    19: 1,
+    20: 0,
+  }
+  if (overrides[value] !== undefined) return overrides[value]
+  if (value >= 21) return -2 * (value - 20)
+  return getClassicEffect(value)
+}
+
 function getClassicEffect(statValue: number): StatEffectValue | null {
   const value = Math.round(Number(statValue))
   if (!Number.isFinite(value) || value < 1) return null
@@ -607,6 +716,11 @@ function getClassicEffect(statValue: number): StatEffectValue | null {
 
 const TABLES: Partial<Record<SheetPresetId, ThresholdTable>> = {
   classic: table([]),
+  friendship: table([]),
+  interleaf: table([]),
+  condemned: table([
+    [1, '-∞'], [2, '-∞'], [3, '-∞'], [4, '-∞'], [5, '-∞'], [6, '-∞'], [8, -1],
+  ]),
   'alt-kaina': table([]),
   molchun: table([
     [1, 3], [2, 1.5], [6, 1.5], [8, 4], [9, 4], [17, -2], [18, -4], [19, -6], [20, -8],
@@ -656,6 +770,9 @@ function normalizePresetIdByClassStatus(classStatus: string): SheetPresetId | nu
   const preset = SHEET_PRESETS.find((p) => p.label.toLowerCase() === value)
   if (preset) return preset.id
   if (value.includes('классичес')) return 'classic'
+  if (value.includes('междулист') || value.includes('междудист')) return 'interleaf'
+  if (value.includes('дружб')) return 'friendship'
+  if (value.includes('приговор')) return 'condemned'
   if (value.includes('альт кайна')) return 'alt-kaina'
   if (value.includes('молчун')) return 'molchun'
   if (value.includes('гарри')) return 'garry'
@@ -681,6 +798,7 @@ export function getStatEffectForSheet(classStatus: string, statValue: number): S
   const presetId = normalizePresetIdByClassStatus(classStatus)
   if (!presetId) return getClassicEffect(statValue)
   if (presetId === 'classic') return getClassicEffect(statValue)
+  if (presetId === 'interleaf') return getInterleafEffect(statValue)
   if (presetId === 'alt-kaina') return getAltKainaEffect(statValue)
   if (presetId === 'casual') return getCasualEffect(statValue)
   const byPreset = TABLES[presetId] ?? BASE_TABLE
@@ -695,6 +813,7 @@ export function getStatEffectForCharacterSheet(
   const presetId = resolveCharacterPresetId(sheetPresetId, classStatus)
   if (!presetId) return getClassicEffect(statValue)
   if (presetId === 'classic') return getClassicEffect(statValue)
+  if (presetId === 'interleaf') return getInterleafEffect(statValue)
   if (presetId === 'alt-kaina') return getAltKainaEffect(statValue)
   if (presetId === 'casual') return getCasualEffect(statValue)
   const byPreset = TABLES[presetId] ?? BASE_TABLE
@@ -736,6 +855,14 @@ export function getThresholdEffectsForCharacter(
     const rows: Array<{ threshold: number; effect: StatEffectValue }> = []
     for (let value = 15; value <= 40; value++) {
       const effect = getAltKainaEffect(value)
+      if (effect !== null) rows.push({ threshold: value, effect })
+    }
+    return rows
+  }
+  if (presetId === 'interleaf') {
+    const rows: Array<{ threshold: number; effect: StatEffectValue }> = []
+    for (let value = 1; value <= 40; value++) {
+      const effect = getInterleafEffect(value)
       if (effect !== null) rows.push({ threshold: value, effect })
     }
     return rows

@@ -103,6 +103,7 @@ function GameRoomContent() {
     showScreenMessage, dismissScreenMessage, setHallOfFame,
     setStageFx, setPlayerFlashlight,
     presence, canRollDice, diceCooldownSec, setHandRaised, pingPlayer,
+    createNpcCharacter,
   } = useRoom()
 
   const [playerTab, setPlayerTab] = useState<PlayerTabId>('sheet')
@@ -484,6 +485,7 @@ function GameRoomContent() {
                       players={players}
                       characters={characters}
                       onSave={saveCharacter}
+                      onCreateNpc={createNpcCharacter}
                     />
                   </div>
                   <div className="shrink-0 flex justify-end">

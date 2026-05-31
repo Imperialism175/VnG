@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Lock, Scroll, Trash2, Unlock, PlusCircle } from 'lucide-react'
+import { Lock, RotateCw, Scroll, Trash2, Unlock, PlusCircle } from 'lucide-react'
 import type { Character, CounterField, StatField, TextField } from '@/types'
 import { generateId } from '@/lib/utils'
 import { StatIcon } from '@/lib/statIcons'
@@ -8,7 +8,6 @@ import { SegmentedHpBar } from '@/components/ui/SegmentedHpBar'
 import { Button, Input } from '@/components/ui/Button'
 import {
   applySheetPreset,
-  computeMaxHpBySpentPoints,
   getStatEffectForCharacterSheet,
   getThresholdEffectsForCharacter,
   isSkillPointCounter,
@@ -74,10 +73,8 @@ function formatThresholdEffect(effect: StatEffectValue): string {
 }
 
 function isHpStat(name: string) {
-  return String(name ?? '').trim().toLowerCase() === 'хп'
+  return /^(хп|здоровье|здоровье\.?)$/i.test(String(name ?? '').trim())
 }
-
-const HP_BASE_VALUE = 0
 
 function isAbilitiesField(name: string): boolean {
   return name.trim().toLowerCase() === 'способности'
@@ -105,6 +102,59 @@ function isEnergyStat(name: string): boolean {
 
 function isEnergyCounter(name: string): boolean {
   return String(name ?? '').trim().toLowerCase() === 'энергия'
+}
+
+function isIntellectStat(name: string): boolean {
+  const normalized = String(name ?? '').trim().toLowerCase()
+  return normalized === 'интеллект' || normalized === 'интелект' || normalized === 'int'
+}
+
+function isHintCounter(name: string): boolean {
+  return String(name ?? '').trim().toLowerCase() === 'подсказки'
+}
+
+function getFinalStatValueForCounters(
+  stat: StatField,
+  sheetPresetId: string | null | undefined,
+  classStatus: string
+): number {
+  const base = Math.round(Number(stat.value) || 0)
+  const effect = getStatEffectForCharacterSheet(sheetPresetId, classStatus, base)
+  const numericEffect = typeof effect === 'number' && Number.isFinite(effect) ? effect : 0
+  return Math.max(0, Math.round(base + numericEffect))
+}
+
+function syncHintCounter(
+  stats: StatField[],
+  counters: CounterField[],
+  sheetPresetId: string | null | undefined,
+  classStatus: string
+): CounterField[] {
+  const intellect = stats.find((s) => isIntellectStat(s.name))
+  if (!intellect) return counters
+  const intellectValue = getFinalStatValueForCounters(intellect, sheetPresetId, classStatus)
+  const hintMax = Math.floor(intellectValue / 5)
+  const hintsIdx = counters.findIndex((c) => isHintCounter(c.name))
+  if (hintsIdx >= 0) {
+    return counters.map((c, i) =>
+      i === hintsIdx ? { ...c, max: hintMax, current: Math.min(c.current, hintMax) } : c
+    )
+  }
+  return [...counters, { id: generateId(), name: 'Подсказки', current: hintMax, max: hintMax }]
+}
+
+function evaluateCalculatorExpression(expr: string): { ok: true; value: string } | { ok: false; error: string } {
+  const normalized = String(expr ?? '').replace(/,/g, '.').trim()
+  if (!normalized) return { ok: false, error: 'Введите выражение' }
+  if (!/^[\d+\-*/%.()\s]+$/.test(normalized)) return { ok: false, error: 'Недопустимые символы' }
+  try {
+    const result = Function(`"use strict"; return (${normalized});`)()
+    if (typeof result !== 'number' || !Number.isFinite(result)) return { ok: false, error: 'Ошибка вычисления' }
+    const pretty = Number.isInteger(result) ? String(result) : String(Number(result.toFixed(6)))
+    return { ok: true, value: pretty }
+  } catch {
+    return { ok: false, error: 'Неверное выражение' }
+  }
 }
 
 function toRoundedNumberOrNull(value: string): number | null {
@@ -158,6 +208,135 @@ function buildAbilityLevelsText(levels: Record<number, string>): string {
   return rows.join('\n\n')
 }
 
+const DAREDEVIL_ABILITY_KEYS = [
+  'Уровень 7-1',
+  'Уровень 7-2',
+  'Уровень 7-3',
+  'Уровень 7-4',
+  'Уровень 7-5',
+  'Уровень 7-6',
+  'Уровень 20',
+] as const
+
+function parseDaredevilAbilityLevels(value: string): Record<string, string> {
+  const src = String(value ?? '')
+  const result = Object.fromEntries(DAREDEVIL_ABILITY_KEYS.map((k) => [k, ''])) as Record<string, string>
+  const hasLegacyTemplate = (text: string) =>
+    /ур(?:овень)?\s*1\s*:/i.test(text) &&
+    /ур(?:овень)?\s*2\s*:/i.test(text) &&
+    /ур(?:овень)?\s*7\s*:/i.test(text)
+  const headerRe = /(?:^|\n)[ \t]*(ур(?:овень)?\s*(?:7-[1-6]|20))[ \t]*:[ \t]*/gi
+  const matches: Array<{ key: string; start: number; contentStart: number }> = []
+  let m: RegExpExecArray | null = null
+  while ((m = headerRe.exec(src)) !== null) {
+    const rawKey = String(m[1] ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+    const normalized =
+      rawKey.startsWith('уровень') ? `Уровень ${rawKey.slice('уровень'.length).trim()}` : null
+    if (!normalized || !DAREDEVIL_ABILITY_KEYS.includes(normalized as (typeof DAREDEVIL_ABILITY_KEYS)[number])) {
+      continue
+    }
+    matches.push({ key: normalized, start: m.index, contentStart: headerRe.lastIndex })
+  }
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i]
+    const next = matches[i + 1]
+    const end = next ? next.start : src.length
+    let chunk = src.slice(current.contentStart, end)
+    if (chunk.startsWith('\n')) chunk = chunk.slice(1)
+    if (chunk.endsWith('\n')) chunk = chunk.slice(0, -1)
+    if (hasLegacyTemplate(chunk)) chunk = ''
+    result[current.key] = chunk
+  }
+  return result
+}
+
+function buildDaredevilAbilityLevelsText(levels: Record<string, string>): string {
+  return DAREDEVIL_ABILITY_KEYS.map((key) => `${key}:\n${String(levels[key] ?? '')}`).join('\n\n')
+}
+
+const CONDEMNED_ABILITY_KEYS = [
+  'Уровень 1',
+  'Уровень 2',
+  'Уровень 3',
+  'Уровень 6',
+  'Уровень ∞',
+] as const
+
+function parseCondemnedAbilityLevels(value: string): Record<string, string> {
+  const src = String(value ?? '')
+  const result = Object.fromEntries(CONDEMNED_ABILITY_KEYS.map((k) => [k, ''])) as Record<string, string>
+  const headerRe = /(?:^|\n)[ \t]*(ур(?:овень)?\s*(?:1|2|3|6|∞|inf))[ \t]*:[ \t]*/gi
+  const matches: Array<{ key: string; start: number; contentStart: number }> = []
+  let m: RegExpExecArray | null = null
+  while ((m = headerRe.exec(src)) !== null) {
+    const raw = String(m[1] ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+    const rawSuffix = raw.startsWith('уровень') ? raw.slice('уровень'.length).trim() : ''
+    const normalizedSuffix = rawSuffix === 'inf' ? '∞' : rawSuffix
+    const normalized = `Уровень ${normalizedSuffix}`
+    if (!CONDEMNED_ABILITY_KEYS.includes(normalized as (typeof CONDEMNED_ABILITY_KEYS)[number])) continue
+    matches.push({ key: normalized, start: m.index, contentStart: headerRe.lastIndex })
+  }
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i]
+    const next = matches[i + 1]
+    const end = next ? next.start : src.length
+    let chunk = src.slice(current.contentStart, end)
+    if (chunk.startsWith('\n')) chunk = chunk.slice(1)
+    if (chunk.endsWith('\n')) chunk = chunk.slice(0, -1)
+    result[current.key] = chunk
+  }
+  return result
+}
+
+function buildCondemnedAbilityLevelsText(levels: Record<string, string>): string {
+  return CONDEMNED_ABILITY_KEYS.map((key) => `${key}:\n${String(levels[key] ?? '')}`).join('\n\n')
+}
+
+const INTERLEAF_ABILITY_KEYS = [
+  'Уровень 1',
+  'Уровень 1+',
+  'Уровень 2',
+  'Уровень 2+',
+  'Уровень 3',
+  'Уровень 3+',
+  'Уровень 4',
+  'Уровень 4+',
+  'Уровень 5',
+  'Уровень 5+',
+  'Уровень 6',
+  'Уровень 6+',
+  'Уровень 7',
+] as const
+
+function parseInterleafAbilityLevels(value: string): Record<string, string> {
+  const src = String(value ?? '')
+  const result = Object.fromEntries(INTERLEAF_ABILITY_KEYS.map((k) => [k, ''])) as Record<string, string>
+  const headerRe = /(?:^|\n)[ \t]*(ур(?:овень)?\s*(?:[1-7]\+?))[ \t]*:[ \t]*/gi
+  const matches: Array<{ key: string; start: number; contentStart: number }> = []
+  let m: RegExpExecArray | null = null
+  while ((m = headerRe.exec(src)) !== null) {
+    const raw = String(m[1] ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+    const rawSuffix = raw.startsWith('уровень') ? raw.slice('уровень'.length).trim() : ''
+    const normalized = `Уровень ${rawSuffix}`
+    if (!INTERLEAF_ABILITY_KEYS.includes(normalized as (typeof INTERLEAF_ABILITY_KEYS)[number])) continue
+    matches.push({ key: normalized, start: m.index, contentStart: headerRe.lastIndex })
+  }
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i]
+    const next = matches[i + 1]
+    const end = next ? next.start : src.length
+    let chunk = src.slice(current.contentStart, end)
+    if (chunk.startsWith('\n')) chunk = chunk.slice(1)
+    if (chunk.endsWith('\n')) chunk = chunk.slice(0, -1)
+    result[current.key] = chunk
+  }
+  return result
+}
+
+function buildInterleafAbilityLevelsText(levels: Record<string, string>): string {
+  return INTERLEAF_ABILITY_KEYS.map((key) => `${key}:\n${String(levels[key] ?? '')}`).join('\n\n')
+}
+
 export function CharacterSheet({
   character,
   onChange,
@@ -167,17 +346,30 @@ export function CharacterSheet({
   restrictedView,
 }: CharacterSheetProps) {
   const viewOnly = readOnly || restrictedView
+  const canEdit = !viewOnly || Boolean(gmEditing)
   /** Игроки никогда не редактируют HP; ГМ — только без lockHp */
   const healthLocked = !gmEditing || Boolean(lockHp)
   const [local, setLocal] = useState(character)
   const [showThresholdTable, setShowThresholdTable] = useState(false)
+  const [rotationStep, setRotationStep] = useState<0 | 1 | 2>(0)
+  const [calculatorInput, setCalculatorInput] = useState('')
+  const [calculatorResult, setCalculatorResult] = useState('')
+  const [calculatorError, setCalculatorError] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const researcherMode = isResearcherSheet(local.sheet_preset_id ?? null, local.class_status)
   const specialFieldLocks = new Set(local.special_field_locks ?? [])
   const statPointsLocked = Boolean(local.stat_points_locked)
 
   useEffect(() => {
-    setLocal(character)
+    setLocal({
+      ...character,
+      counters: syncHintCounter(
+        character.stats,
+        character.counters,
+        character.sheet_preset_id ?? null,
+        character.class_status
+      ),
+    })
   }, [character.id, character.updated_at])
 
   const scheduleSave = useCallback(
@@ -191,6 +383,17 @@ export function CharacterSheet({
 
   function updateField<K extends keyof Character>(key: K, value: Character[K]) {
     scheduleSave({ ...local, [key]: value })
+  }
+
+  function runCalculator() {
+    const evaluated = evaluateCalculatorExpression(calculatorInput)
+    if (evaluated.ok) {
+      setCalculatorResult(evaluated.value)
+      setCalculatorError('')
+      return
+    }
+    setCalculatorResult('')
+    setCalculatorError(evaluated.error)
   }
 
   function addStat() {
@@ -252,18 +455,12 @@ export function CharacterSheet({
       const hpSpent = Number(patchedStat.value)
       if (Number.isFinite(hpSpent)) {
         const normalizedSpent = Math.max(0, Math.round(hpSpent))
-        const hpMax = computeMaxHpBySpentPoints(
-          normalizedSpent,
-          local.sheet_preset_id ?? null,
-          local.class_status,
-          HP_BASE_VALUE
-        )
         const hpIdx = finalCounters.findIndex((c) => isHealthCounter(c.name))
         finalStats = finalStats.map((s) => (s.id === id ? { ...s, value: String(normalizedSpent) } : s))
         if (hpIdx >= 0) {
           finalCounters = finalCounters.map((c, i) =>
             i === hpIdx
-              ? { ...c, max: hpMax, current: Math.min(c.current, hpMax) }
+              ? { ...c, max: normalizedSpent, current: Math.min(c.current, normalizedSpent) }
               : c
           )
         }
@@ -274,7 +471,11 @@ export function CharacterSheet({
     if (isMolchun) {
       const energyStat = finalStats.find((s) => isEnergyStat(s.name))
       if (energyStat) {
-        const energyMax = Math.max(0, Math.round(Number(energyStat.value) || 0))
+        const energyMax = getFinalStatValueForCounters(
+          energyStat,
+          local.sheet_preset_id ?? null,
+          local.class_status
+        )
         const energyCounterIdx = finalCounters.findIndex((c) => isEnergyCounter(c.name))
         if (energyCounterIdx >= 0) {
           finalCounters = finalCounters.map((c, i) =>
@@ -287,6 +488,12 @@ export function CharacterSheet({
         }
       }
     }
+    finalCounters = syncHintCounter(
+      finalStats,
+      finalCounters,
+      local.sheet_preset_id ?? null,
+      local.class_status
+    )
 
     scheduleSave({
       ...local,
@@ -313,23 +520,38 @@ export function CharacterSheet({
       }
       const rawCurrent = patch.current ?? c.current
       const rawMax = patch.max ?? c.max
-      const safeMax = Math.max(1, Math.round(Number(rawMax) || 1))
+      const safeMax = isHealthCounter(c.name)
+        ? Math.max(0, Math.round(Number(rawMax) || 0))
+        : Math.max(1, Math.round(Number(rawMax) || 1))
       const safeCurrent = Math.max(0, Math.min(safeMax, Math.round(Number(rawCurrent) || 0)))
       return { ...c, ...patch, current: safeCurrent, max: safeMax }
     })
     const changed = nextCounters.find((c) => c.id === id)
     if (!changed || !isHealthCounter(changed.name)) {
+      const syncedCounters = syncHintCounter(
+        local.stats,
+        nextCounters,
+        local.sheet_preset_id ?? null,
+        local.class_status
+      )
       scheduleSave({
         ...local,
-        counters: nextCounters,
+        counters: syncedCounters,
       })
       return
     }
     const nextHpStatValue = String(Math.max(0, Math.round(Number(changed.max) || 0)))
+    const nextStats = local.stats.map((s) => (isHpStat(s.name) ? { ...s, value: nextHpStatValue } : s))
+    const syncedCounters = syncHintCounter(
+      nextStats,
+      nextCounters,
+      local.sheet_preset_id ?? null,
+      local.class_status
+    )
     scheduleSave({
       ...local,
-      counters: nextCounters,
-      stats: local.stats.map((s) => (isHpStat(s.name) ? { ...s, value: nextHpStatValue } : s)),
+      counters: syncedCounters,
+      stats: nextStats,
     })
   }
 
@@ -355,23 +577,24 @@ export function CharacterSheet({
     if (isHpStat(stat.name) && hpIdx >= 0) {
       const currentSpent = Math.max(0, Math.round(currentStat))
       const nextSpent = Math.max(0, currentSpent + delta)
-      const nextMaxHp = computeMaxHpBySpentPoints(
-        nextSpent,
+      const nextStats = local.stats.map((s) =>
+        s.id === statId ? { ...s, value: String(nextSpent) } : s
+      )
+      const nextCounters = syncHintCounter(
+        nextStats,
+        local.counters.map((c, i) => {
+          if (i === pointsIdx) return { ...c, current: Math.max(0, c.current - delta) }
+          if (i === hpIdx) return { ...c, max: nextSpent, current: Math.min(c.current, nextSpent) }
+          return c
+        }),
         local.sheet_preset_id ?? null,
-        local.class_status,
-        HP_BASE_VALUE
+        local.class_status
       )
 
       scheduleSave({
         ...local,
-        counters: local.counters.map((c, i) => {
-          if (i === pointsIdx) return { ...c, current: Math.max(0, c.current - delta) }
-          if (i === hpIdx) return { ...c, max: nextMaxHp, current: Math.min(c.current, nextMaxHp) }
-          return c
-        }),
-        stats: local.stats.map((s) =>
-          s.id === statId ? { ...s, value: String(nextSpent) } : s
-        ),
+        counters: nextCounters,
+        stats: nextStats,
       })
       return
     }
@@ -386,7 +609,11 @@ export function CharacterSheet({
     if (isMolchun) {
       const energyStat = nextStats.find((s) => isEnergyStat(s.name))
       if (energyStat) {
-        const energyMax = Math.max(0, Math.round(Number(energyStat.value) || 0))
+        const energyMax = getFinalStatValueForCounters(
+          energyStat,
+          local.sheet_preset_id ?? null,
+          local.class_status
+        )
         const energyCounterIdx = nextCounters.findIndex((c) => isEnergyCounter(c.name))
         if (energyCounterIdx >= 0) {
           nextCounters = nextCounters.map((c, i) =>
@@ -397,6 +624,12 @@ export function CharacterSheet({
         }
       }
     }
+    nextCounters = syncHintCounter(
+      nextStats,
+      nextCounters,
+      local.sheet_preset_id ?? null,
+      local.class_status
+    )
     scheduleSave({
       ...local,
       counters: nextCounters,
@@ -475,6 +708,17 @@ export function CharacterSheet({
   const activePresetLabel =
     SHEET_PRESETS.find((preset) => preset.id === (local.sheet_preset_id as SheetPresetId | undefined))?.label ??
     null
+  const rotationLabel = rotationStep === 0 ? '0°' : rotationStep === 1 ? '90°' : '180°'
+  const rotationStyle = {
+    transform:
+      rotationStep === 0
+        ? 'none'
+        : rotationStep === 1
+          ? 'rotate(90deg) scale(0.84)'
+          : 'rotate(180deg) scale(0.94)',
+    transformOrigin: 'center center',
+    transition: 'transform 220ms ease',
+  }
 
   return (
     <Panel
@@ -489,14 +733,25 @@ export function CharacterSheet({
       fillHeight
       className={`h-full min-h-0 ${engineerGlitchActive ? 'vng-sheet-engineer-glitch' : ''}`}
       action={
-        gmEditing ? (
-          <span className="text-xs uppercase tracking-wide text-vng-amber font-semibold px-2 py-0.5 rounded bg-vng-amber/10">
-            Редактирует ГМ
-          </span>
-        ) : undefined
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="vng-tui-btn text-[10px]"
+            title="Повернуть лист"
+            onClick={() => setRotationStep((prev) => ((prev + 1) % 3) as 0 | 1 | 2)}
+          >
+            <RotateCw size={12} />
+            ПОВОРОТ {rotationLabel}
+          </button>
+          {gmEditing && (
+            <span className="text-xs uppercase tracking-wide text-vng-amber font-semibold px-2 py-0.5 rounded bg-vng-amber/10">
+              Редактирует ГМ
+            </span>
+          )}
+        </div>
       }
     >
-      <div className="relative h-full min-h-0 overflow-hidden">
+      <div className="relative h-full min-h-0 overflow-hidden" style={rotationStyle}>
         {isPrettySheet && (
           <>
             <pre
@@ -539,10 +794,10 @@ export function CharacterSheet({
           value={local.name}
           onChange={(e) => updateField('name', e.target.value)}
           placeholder="Имя персонажа"
-          disabled={viewOnly}
+          disabled={!canEdit}
         />
 
-        {!viewOnly && (
+        {canEdit && (
           <section>
             <label className="vng-tui-field">
               <span className="vng-tui-field__label">ШАБЛОН ЛИСТИКА:</span>
@@ -600,7 +855,7 @@ export function CharacterSheet({
           <div className="flex flex-col gap-3">
             {textFields.map((field) => {
               const fieldLocked = specialFieldLocks.has(field.id)
-              const fieldReadOnly = viewOnly || (!gmEditing && fieldLocked)
+              const fieldReadOnly = !canEdit || (!gmEditing && fieldLocked)
               const fieldMaxLen = getTextFieldMaxLength(resolvedPresetId, field.name)
               return (
                 <div
@@ -628,25 +883,23 @@ export function CharacterSheet({
                       {fieldLocked ? 'ЗАКРЫТО' : 'ОТКРЫТО'}
                     </button>
                   )}
-                  {!viewOnly && <span className="text-[10px] text-vng-muted">фиксировано</span>}
+                  {canEdit && <span className="text-[10px] text-vng-muted">фиксировано</span>}
                 </div>
-                {isAbilitiesField(field.name) && resolvedPresetId !== 'daredevil' ? (
+                {isAbilitiesField(field.name) ? (
                   <AbilityLevelsTable
                     value={field.value}
                     readOnly={fieldReadOnly}
+                    mode={
+                      resolvedPresetId === 'daredevil'
+                        ? 'daredevil'
+                        : resolvedPresetId === 'condemned'
+                          ? 'condemned'
+                          : resolvedPresetId === 'interleaf'
+                            ? 'interleaf'
+                          : 'default'
+                    }
                     onChange={(next) => updateTextField(field.id, { value: next })}
                   />
-                ) : isAbilitiesField(field.name) && resolvedPresetId === 'daredevil' ? (
-                  fieldReadOnly ? (
-                    <p className="text-sm whitespace-pre-wrap text-vng-text/90">{field.value || '—'}</p>
-                  ) : (
-                    <textarea
-                      className="w-full min-h-[160px] px-2 py-2 text-sm rounded-lg bg-vng-elevated border border-vng-border focus:outline-none focus:border-vng-amber/50 resize-y"
-                      value={field.value}
-                      onChange={(e) => updateTextField(field.id, { value: e.target.value })}
-                      placeholder="Только уровни 7-1..7-6 и 20"
-                    />
-                  )
                 ) : fieldReadOnly ? (
                   <p className="text-sm whitespace-pre-wrap text-vng-text/90">{field.value || '—'}</p>
                 ) : (
@@ -684,7 +937,7 @@ export function CharacterSheet({
             <h3 className="text-sm font-semibold uppercase tracking-wide text-vng-muted">
               {restrictedView ? 'Здоровье' : 'Счётчики'}
             </h3>
-            {!viewOnly && !restrictedView && (
+            {canEdit && !restrictedView && (
               <Button variant="ghost" size="sm" type="button" onClick={addCounter}>
                 <PlusCircle size={14} /> Добавить
               </Button>
@@ -698,7 +951,7 @@ export function CharacterSheet({
               <CounterRow
                 key={counter.id}
                 counter={counter}
-                readOnly={viewOnly || restrictedView}
+                readOnly={!canEdit || restrictedView}
                 hpLocked={healthLocked && isHealthCounter(counter.name)}
                 inspirationLocked={!gmEditing && isInspirationCounter(counter.name)}
                 onUpdate={(p) => updateCounter(counter.id, p)}
@@ -741,7 +994,7 @@ export function CharacterSheet({
                   {statPointsLocked ? 'СТАТЫ ЗАКРЫТЫ' : 'СТАТЫ ОТКРЫТЫ'}
                 </button>
               )}
-              {!viewOnly && (gmEditing || !statPointsLocked) && (
+              {canEdit && (gmEditing || !statPointsLocked) && (
                 <Button variant="ghost" size="sm" type="button" onClick={addStat}>
                   <PlusCircle size={14} /> Добавить
                 </Button>
@@ -783,6 +1036,13 @@ export function CharacterSheet({
           )}
           {(() => {
             const spCounter = local.counters.find((c) => isSkillPointCounter(c.name))
+            if (researcherMode) {
+              return (
+                <p className="text-xs text-vng-muted mb-2">
+                  Режим исследователя: вместо очков используйте +∞ / -∞ на карточках характеристик.
+                </p>
+              )
+            }
             return (
               <div className="flex items-center justify-between gap-2 mb-2">
                 <p className="text-xs text-vng-muted">
@@ -814,10 +1074,10 @@ export function CharacterSheet({
                 classStatus={local.class_status}
                 sheetPresetId={local.sheet_preset_id ?? null}
                 index={index}
-                readOnly={viewOnly || (!gmEditing && statPointsLocked)}
-                canSpend={!viewOnly && !statPointsLocked && local.counters.some((c) => isSkillPointCounter(c.name))}
+                readOnly={!canEdit || (!gmEditing && statPointsLocked)}
+                canSpend={canEdit && !statPointsLocked && local.counters.some((c) => isSkillPointCounter(c.name))}
                 researcherMode={researcherMode}
-                canSetInfinity={Boolean(gmEditing)}
+                canSetInfinity={canEdit && researcherMode}
                 onUpdate={(p) => updateStat(stat.id, p)}
                 onRemove={() => removeStat(stat.id)}
                 onSpendPoint={(d) => spendSkillPointOnStat(stat.id, d)}
@@ -825,6 +1085,41 @@ export function CharacterSheet({
             ))}
             {local.stats.length === 0 && (
               <p className="text-xs text-vng-muted text-center py-2 col-span-full">Нет характеристик</p>
+            )}
+          </div>
+          <div className="mt-3 rounded-lg border border-vng-border/80 bg-vng-bg/60 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-vng-muted mb-2">Калькулятор</p>
+            <div className="flex items-center gap-2">
+              <input
+                className="flex-1 px-2 py-1 text-sm rounded bg-vng-elevated border border-vng-border focus:outline-none focus:border-vng-amber/40"
+                value={calculatorInput}
+                onChange={(e) => setCalculatorInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') runCalculator()
+                }}
+                placeholder="Например: (12 + 5) * 3"
+              />
+              <Button size="sm" type="button" onClick={runCalculator}>
+                =
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={() => {
+                  setCalculatorInput('')
+                  setCalculatorResult('')
+                  setCalculatorError('')
+                }}
+              >
+                Сброс
+              </Button>
+            </div>
+            {calculatorResult && (
+              <p className="mt-2 text-sm text-vng-amber vng-mono">Результат: {calculatorResult}</p>
+            )}
+            {calculatorError && (
+              <p className="mt-2 text-xs text-vng-danger">{calculatorError}</p>
             )}
           </div>
         </section>
@@ -839,13 +1134,44 @@ export function CharacterSheet({
 function AbilityLevelsTable({
   value,
   readOnly,
+  mode = 'default',
   onChange,
 }: {
   value: string
   readOnly?: boolean
+  mode?: 'default' | 'daredevil' | 'condemned' | 'interleaf'
   onChange: (next: string) => void
 }) {
-  const levels = parseAbilityLevels(value)
+  const isDaredevil = mode === 'daredevil'
+  const isCondemned = mode === 'condemned'
+  const isInterleaf = mode === 'interleaf'
+  const defaultLevels = parseAbilityLevels(value)
+  const daredevilLevels = parseDaredevilAbilityLevels(value)
+  const condemnedLevels = parseCondemnedAbilityLevels(value)
+  const interleafLevels = parseInterleafAbilityLevels(value)
+  const rows = isDaredevil
+    ? DAREDEVIL_ABILITY_KEYS.map((key) => ({
+        key,
+        label: key.endsWith('20') ? 'Ур. 20' : 'Ур. 7',
+        value: daredevilLevels[key] ?? '',
+      }))
+    : isCondemned
+      ? CONDEMNED_ABILITY_KEYS.map((key) => ({
+          key,
+          label: key === 'Уровень ∞' ? 'Ур. ∞' : `Ур. ${key.replace('Уровень ', '')}`,
+          value: condemnedLevels[key] ?? '',
+        }))
+      : isInterleaf
+        ? INTERLEAF_ABILITY_KEYS.map((key) => ({
+            key,
+            label: `Ур. ${key.replace('Уровень ', '')}`,
+            value: interleafLevels[key] ?? '',
+          }))
+    : Array.from({ length: 7 }, (_, idx) => idx + 1).map((level) => ({
+        key: `lvl-${level}`,
+        label: `Ур. ${level}`,
+        value: defaultLevels[level] ?? '',
+      }))
   return (
     <div className="min-w-0">
       <table className="w-full table-fixed border border-vng-border text-xs">
@@ -856,21 +1182,41 @@ function AbilityLevelsTable({
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: 7 }, (_, idx) => idx + 1).map((level) => (
-            <tr key={level} className="border-b border-vng-border/60">
-              <td className="px-2 py-1 align-top font-semibold text-vng-amber">Ур. {level}</td>
+          {rows.map((row) => (
+            <tr key={row.key} className="border-b border-vng-border/60">
+              <td className="px-2 py-1 align-top font-semibold text-vng-amber">{row.label}</td>
               <td className="px-2 py-1">
                 {readOnly ? (
-                  <span className="text-sm text-vng-text/90 break-words">{levels[level] || '—'}</span>
+                  <span className="text-sm text-vng-text/90 break-words">{row.value || '—'}</span>
                 ) : (
                   <textarea
                     className="w-full min-h-[56px] bg-transparent text-sm border border-vng-border/60 rounded px-2 py-1 focus:outline-none focus:border-vng-amber/40 resize-y"
-                    value={levels[level] ?? ''}
+                    value={row.value}
                     onChange={(e) => {
-                      const nextLevels = { ...levels, [level]: e.target.value }
-                      onChange(buildAbilityLevelsText(nextLevels))
+                      if (isDaredevil) {
+                        const nextLevels = { ...daredevilLevels, [row.key]: e.target.value }
+                        onChange(buildDaredevilAbilityLevelsText(nextLevels))
+                      } else if (isCondemned) {
+                        const nextLevels = { ...condemnedLevels, [row.key]: e.target.value }
+                        onChange(buildCondemnedAbilityLevelsText(nextLevels))
+                      } else if (isInterleaf) {
+                        const nextLevels = { ...interleafLevels, [row.key]: e.target.value }
+                        onChange(buildInterleafAbilityLevelsText(nextLevels))
+                      } else {
+                        const level = Number(String(row.key).replace('lvl-', ''))
+                        const nextLevels = { ...defaultLevels, [level]: e.target.value }
+                        onChange(buildAbilityLevelsText(nextLevels))
+                      }
                     }}
-                    placeholder={`Способности ${level} уровня (по одной с новой строки)`}
+                    placeholder={
+                      isDaredevil
+                        ? `Способности ${row.label === 'Ур. 20' ? '20' : '7'} уровня (по одной с новой строки)`
+                        : isCondemned
+                          ? `Способности ${row.label.replace('Ур. ', '')} уровня (по одной с новой строки)`
+                          : isInterleaf
+                            ? `Способности ${row.label.replace('Ур. ', '')} уровня (по одной с новой строки)`
+                        : `Способности ${row.label.replace('Ур. ', '')} уровня (по одной с новой строки)`
+                    }
                   />
                 )}
               </td>
@@ -898,6 +1244,7 @@ function CounterRow({
   onRemove: () => void
 }) {
   const counterReadOnly = readOnly || hpLocked || inspirationLocked
+  const healthCounter = isHealthCounter(counter.name)
   return (
     <div className="vng-counter-block">
       <div className="flex items-center gap-2 mb-2">
@@ -943,10 +1290,16 @@ function CounterRow({
             <span className="text-xs text-vng-muted">/</span>
             <input
               type="number"
-              min={1}
+              min={healthCounter ? 0 : 1}
               className="w-16 px-2 py-1 text-xs rounded bg-vng-elevated border border-vng-border text-right"
               value={counter.max}
-              onChange={(e) => onUpdate({ max: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+              onChange={(e) =>
+                onUpdate({
+                  max: healthCounter
+                    ? Math.max(0, parseInt(e.target.value, 10) || 0)
+                    : Math.max(1, parseInt(e.target.value, 10) || 1),
+                })
+              }
               title="Максимум"
             />
           </div>

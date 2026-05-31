@@ -4,7 +4,12 @@ import { join, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer } from 'ws'
 import { randomUUID } from 'node:crypto'
-import { parseAndRoll, buildRollExpression, formatRollChatMessage, extractAbilitySlotsFromText } from './dice.js'
+import {
+  parseAndRoll,
+  buildRollExpression,
+  formatRollChatMessage,
+  extractAbilitySlotModesFromText,
+} from './dice.js'
 import { getLevelPalette } from './levels.js'
 import {
   DEFAULT_THEME,
@@ -706,16 +711,26 @@ wss.on('connection', (ws, req) => {
         let abilityLevel = null
         let abilityUsable = null
         const abilitiesText = char?.text_fields?.find((f) => String(f?.name ?? '').trim().toLowerCase() === 'способности')?.value ?? ''
-        const availableLevels = extractAbilitySlotsFromText(abilitiesText)
+        const availableSlots = extractAbilitySlotModesFromText(abilitiesText)
         const absRollTotal = Math.abs(r.total)
         const desiredAbilityLevelRaw = Number(msg.desired_ability_level)
         const desiredAbilityLevel =
           Number.isFinite(desiredAbilityLevelRaw) && desiredAbilityLevelRaw >= 1 && desiredAbilityLevelRaw <= 7
             ? Math.round(desiredAbilityLevelRaw)
             : null
-        if ((msg.sides ?? 20) === 20 && absRollTotal > 0 && availableLevels.length > 0 && desiredAbilityLevel !== null) {
+        let abilityLabel = null
+        if (
+          (msg.sides ?? 20) === 20 &&
+          absRollTotal > 0 &&
+          (availableSlots.base.length > 0 || availableSlots.plus.length > 0) &&
+          desiredAbilityLevel !== null
+        ) {
           abilityLevel = desiredAbilityLevel
-          abilityUsable = availableLevels.includes(desiredAbilityLevel) && absRollTotal % desiredAbilityLevel === 0
+          const remainder = absRollTotal % desiredAbilityLevel
+          const baseOk = availableSlots.base.includes(desiredAbilityLevel) && remainder === 0
+          const plusOk = availableSlots.plus.includes(desiredAbilityLevel) && remainder === 1
+          abilityUsable = baseOk || plusOk
+          abilityLabel = plusOk && !baseOk ? `${desiredAbilityLevel}+` : String(desiredAbilityLevel)
         }
 
         let message = formatRollChatMessage(player.name, r.expression, r.rolls, scaledModifier, scaledTotal, player.is_gm)
@@ -723,7 +738,7 @@ wss.on('connection', (ws, req) => {
           message += ` | стат: ${scaleStatName}`
         }
         if (abilityLevel !== null) {
-          message += ` | способность ур.${abilityLevel}: ${abilityUsable ? 'МОЖНО ИСПОЛЬЗОВАТЬ' : 'НЕЛЬЗЯ'}`
+          message += ` | способность ур.${abilityLabel ?? abilityLevel}: ${abilityUsable ? 'МОЖНО ИСПОЛЬЗОВАТЬ' : 'НЕЛЬЗЯ'}`
         }
         const event = {
           id: randomUUID(),
@@ -732,7 +747,7 @@ wss.on('connection', (ws, req) => {
           player_name: player.name,
           expression: r.expression,
           total: scaledTotal,
-          details: `[${r.rolls.join(', ')}] = ${scaledTotal}${scaleStatName ? ` | stat ${scaleStatName}: ${scaledModifier >= 0 ? '+' : ''}${scaledModifier}` : ''}${abilityLevel !== null ? ` | ability lvl ${abilityLevel}: ${abilityUsable ? 'ok' : 'fail'}` : ''}`,
+          details: `[${r.rolls.join(', ')}] = ${scaledTotal}${scaleStatName ? ` | stat ${scaleStatName}: ${scaledModifier >= 0 ? '+' : ''}${scaledModifier}` : ''}${abilityLevel !== null ? ` | ability lvl ${abilityLabel ?? abilityLevel}: ${abilityUsable ? 'ok' : 'fail'}` : ''}`,
           rolls: r.rolls,
           modifier: scaledModifier,
           sides: msg.sides ?? null,
