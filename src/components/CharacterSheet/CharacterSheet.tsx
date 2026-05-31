@@ -337,6 +337,82 @@ function buildInterleafAbilityLevelsText(levels: Record<string, string>): string
   return INTERLEAF_ABILITY_KEYS.map((key) => `${key}:\n${String(levels[key] ?? '')}`).join('\n\n')
 }
 
+type SheetExportPayload = {
+  type: 'vng-character-sheet'
+  version: 1
+  exported_at: string
+  character: Partial<Character>
+}
+
+function toTextFields(src: unknown): TextField[] {
+  if (!Array.isArray(src)) return []
+  return src.map((f) => {
+    const row = (f ?? {}) as Record<string, unknown>
+    return {
+      id: typeof row.id === 'string' && row.id.trim() ? row.id : generateId(),
+      name: String(row.name ?? 'Поле'),
+      value: String(row.value ?? ''),
+    }
+  })
+}
+
+function toStats(src: unknown): StatField[] {
+  if (!Array.isArray(src)) return []
+  return src.map((s) => {
+    const row = (s ?? {}) as Record<string, unknown>
+    return {
+      id: typeof row.id === 'string' && row.id.trim() ? row.id : generateId(),
+      name: String(row.name ?? 'Параметр'),
+      value: String(row.value ?? '0'),
+    }
+  })
+}
+
+function toCounters(src: unknown): CounterField[] {
+  if (!Array.isArray(src)) return []
+  return src.map((c) => {
+    const row = (c ?? {}) as Record<string, unknown>
+    const current = Math.max(0, Math.round(Number(row.current) || 0))
+    const max = Math.max(0, Math.round(Number(row.max) || 0))
+    return {
+      id: typeof row.id === 'string' && row.id.trim() ? row.id : generateId(),
+      name: String(row.name ?? 'Счётчик'),
+      current: Math.min(current, max),
+      max,
+    }
+  })
+}
+
+function buildCharacterFromImportedJson(raw: unknown, base: Character): Character | null {
+  const root = (raw ?? {}) as Record<string, unknown>
+  const fromWrapped =
+    root.type === 'vng-character-sheet' && root.character && typeof root.character === 'object'
+      ? (root.character as Record<string, unknown>)
+      : root
+  if (!fromWrapped || typeof fromWrapped !== 'object') return null
+
+  const next: Character = {
+    ...base,
+    name: String(fromWrapped.name ?? base.name ?? ''),
+    sheet_preset_id:
+      typeof fromWrapped.sheet_preset_id === 'string' || fromWrapped.sheet_preset_id === null
+        ? (fromWrapped.sheet_preset_id as string | null)
+        : base.sheet_preset_id ?? null,
+    class_status: String(fromWrapped.class_status ?? base.class_status ?? ''),
+    description: String(fromWrapped.description ?? base.description ?? ''),
+    text_fields: toTextFields(fromWrapped.text_fields ?? base.text_fields),
+    special_field_locks: Array.isArray(fromWrapped.special_field_locks)
+      ? (fromWrapped.special_field_locks as unknown[]).map((v) => String(v))
+      : (base.special_field_locks ?? []),
+    stat_points_locked: Boolean(fromWrapped.stat_points_locked ?? base.stat_points_locked),
+    sheet_preset_locked: Boolean(fromWrapped.sheet_preset_locked ?? base.sheet_preset_locked),
+    stats: toStats(fromWrapped.stats ?? base.stats),
+    counters: toCounters(fromWrapped.counters ?? base.counters),
+  }
+
+  return next
+}
+
 export function CharacterSheet({
   character,
   onChange,
@@ -356,6 +432,7 @@ export function CharacterSheet({
   const [calculatorResult, setCalculatorResult] = useState('')
   const [calculatorError, setCalculatorError] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
   const researcherMode = isResearcherSheet(local.sheet_preset_id ?? null, local.class_status)
   const specialFieldLocks = new Set(local.special_field_locks ?? [])
   const statPointsLocked = Boolean(local.stat_points_locked)
@@ -395,6 +472,58 @@ export function CharacterSheet({
     }
     setCalculatorResult('')
     setCalculatorError(evaluated.error)
+  }
+
+  function downloadSheet() {
+    const payload: SheetExportPayload = {
+      type: 'vng-character-sheet',
+      version: 1,
+      exported_at: new Date().toISOString(),
+      character: {
+        name: local.name,
+        sheet_preset_id: local.sheet_preset_id ?? null,
+        class_status: local.class_status,
+        description: local.description,
+        text_fields: local.text_fields ?? [],
+        special_field_locks: local.special_field_locks ?? [],
+        stat_points_locked: Boolean(local.stat_points_locked),
+        sheet_preset_locked: Boolean(local.sheet_preset_locked),
+        stats: local.stats ?? [],
+        counters: local.counters ?? [],
+      },
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const safeName = (local.name || local.player_name || 'sheet').replace(/[\\/:*?"<>|]/g, '_')
+    a.download = `${safeName}.vng-sheet.json`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  function openImportPicker() {
+    importInputRef.current?.click()
+  }
+
+  async function handleImportFile(file: File | null) {
+    if (!file) return
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text) as unknown
+      const imported = buildCharacterFromImportedJson(parsed, local)
+      if (!imported) {
+        window.alert('Не удалось прочитать листик. Проверьте формат файла.')
+        return
+      }
+      scheduleSave(imported)
+    } catch {
+      window.alert('Ошибка загрузки листика. Неверный JSON или повреждённый файл.')
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
   }
 
   function addStat() {
@@ -810,6 +939,23 @@ export function CharacterSheet({
           placeholder="Имя персонажа"
           disabled={!canEdit}
         />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" size="sm" variant="secondary" onClick={downloadSheet}>
+            Скачать листик
+          </Button>
+          {canEdit && (
+            <Button type="button" size="sm" variant="ghost" onClick={openImportPicker}>
+              Загрузить листик
+            </Button>
+          )}
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,.vng-sheet.json,application/json"
+            className="hidden"
+            onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
+          />
+        </div>
 
         {canEdit && (
           <section>
