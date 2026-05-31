@@ -124,6 +124,38 @@ function getFinalStatValueForCounters(
   return Math.max(0, Math.round(base + numericEffect))
 }
 
+function getHpCounterMaxFromHpStat(
+  hpStatRaw: number,
+  sheetPresetId: string | null | undefined,
+  classStatus: string
+): number {
+  const spent = Math.max(0, Math.round(hpStatRaw))
+  const effect = getStatEffectForCharacterSheet(sheetPresetId, classStatus, spent)
+  const numericEffect = typeof effect === 'number' && Number.isFinite(effect) ? effect : 0
+  return Math.max(0, Math.round(spent + numericEffect))
+}
+
+function inferBaseHpStatFromFinalMax(
+  finalMax: number,
+  sheetPresetId: string | null | undefined,
+  classStatus: string,
+  searchLimit = 2000
+): number {
+  const target = Math.max(0, Math.round(finalMax))
+  let best = 0
+  let bestDiff = Number.POSITIVE_INFINITY
+  for (let spent = 0; spent <= searchLimit; spent++) {
+    const candidate = getHpCounterMaxFromHpStat(spent, sheetPresetId, classStatus)
+    const diff = Math.abs(candidate - target)
+    if (diff < bestDiff) {
+      bestDiff = diff
+      best = spent
+      if (diff === 0) break
+    }
+  }
+  return best
+}
+
 function syncHintCounter(
   stats: StatField[],
   counters: CounterField[],
@@ -344,6 +376,71 @@ type SheetExportPayload = {
   character: Partial<Character>
 }
 
+type EncryptedSheetEnvelope = {
+  type: 'vng-character-sheet-encrypted'
+  version: 2
+  encrypted_at: string
+  iv_b64: string
+  data_b64: string
+}
+
+const SHEET_SECRET_STORAGE_KEY = 'vng_sheet_secret_v1'
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value)
+  const out = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
+  return out
+}
+
+function getOrCreateSheetSecret(): Uint8Array {
+  const existing = window.localStorage.getItem(SHEET_SECRET_STORAGE_KEY)
+  if (existing) {
+    try {
+      const parsed = base64ToBytes(existing)
+      if (parsed.length === 32) return parsed
+    } catch {
+      /* ignore corrupted value */
+    }
+  }
+  const next = new Uint8Array(32)
+  window.crypto.getRandomValues(next)
+  window.localStorage.setItem(SHEET_SECRET_STORAGE_KEY, bytesToBase64(next))
+  return next
+}
+
+async function encryptSheetPayload(payload: SheetExportPayload): Promise<EncryptedSheetEnvelope> {
+  const keyBytes = getOrCreateSheetSecret()
+  const key = await window.crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt'])
+  const iv = new Uint8Array(12)
+  window.crypto.getRandomValues(iv)
+  const plaintext = new TextEncoder().encode(JSON.stringify(payload))
+  const encrypted = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext)
+  return {
+    type: 'vng-character-sheet-encrypted',
+    version: 2,
+    encrypted_at: new Date().toISOString(),
+    iv_b64: bytesToBase64(iv),
+    data_b64: bytesToBase64(new Uint8Array(encrypted)),
+  }
+}
+
+async function decryptSheetPayload(envelope: EncryptedSheetEnvelope): Promise<SheetExportPayload> {
+  const keyBytes = getOrCreateSheetSecret()
+  const key = await window.crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt'])
+  const iv = base64ToBytes(envelope.iv_b64)
+  const data = base64ToBytes(envelope.data_b64)
+  const decrypted = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data)
+  const text = new TextDecoder().decode(new Uint8Array(decrypted))
+  return JSON.parse(text) as SheetExportPayload
+}
+
 function toTextFields(src: unknown): TextField[] {
   if (!Array.isArray(src)) return []
   return src.map((f) => {
@@ -474,34 +571,39 @@ export function CharacterSheet({
     setCalculatorError(evaluated.error)
   }
 
-  function downloadSheet() {
-    const payload: SheetExportPayload = {
-      type: 'vng-character-sheet',
-      version: 1,
-      exported_at: new Date().toISOString(),
-      character: {
-        name: local.name,
-        sheet_preset_id: local.sheet_preset_id ?? null,
-        class_status: local.class_status,
-        description: local.description,
-        text_fields: local.text_fields ?? [],
-        special_field_locks: local.special_field_locks ?? [],
-        stat_points_locked: Boolean(local.stat_points_locked),
-        sheet_preset_locked: Boolean(local.sheet_preset_locked),
-        stats: local.stats ?? [],
-        counters: local.counters ?? [],
-      },
+  async function downloadSheet() {
+    try {
+      const payload: SheetExportPayload = {
+        type: 'vng-character-sheet',
+        version: 1,
+        exported_at: new Date().toISOString(),
+        character: {
+          name: local.name,
+          sheet_preset_id: local.sheet_preset_id ?? null,
+          class_status: local.class_status,
+          description: local.description,
+          text_fields: local.text_fields ?? [],
+          special_field_locks: local.special_field_locks ?? [],
+          stat_points_locked: Boolean(local.stat_points_locked),
+          sheet_preset_locked: Boolean(local.sheet_preset_locked),
+          stats: local.stats ?? [],
+          counters: local.counters ?? [],
+        },
+      }
+      const encrypted = await encryptSheetPayload(payload)
+      const blob = new Blob([JSON.stringify(encrypted, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const safeName = (local.name || local.player_name || 'sheet').replace(/[\\/:*?"<>|]/g, '_')
+      a.download = `${safeName}.vng-sheet.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      window.alert('Не удалось зашифровать листик для экспорта.')
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const safeName = (local.name || local.player_name || 'sheet').replace(/[\\/:*?"<>|]/g, '_')
-    a.download = `${safeName}.vng-sheet.json`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
   }
 
   function openImportPicker() {
@@ -513,14 +615,28 @@ export function CharacterSheet({
     try {
       const text = await file.text()
       const parsed = JSON.parse(text) as unknown
-      const imported = buildCharacterFromImportedJson(parsed, local)
+      let source: unknown = parsed
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        (parsed as Record<string, unknown>).type === 'vng-character-sheet-encrypted'
+      ) {
+        source = await decryptSheetPayload(parsed as EncryptedSheetEnvelope)
+      }
+      const imported = buildCharacterFromImportedJson(source, local)
       if (!imported) {
         window.alert('Не удалось прочитать листик. Проверьте формат файла.')
         return
       }
+      if (!gmEditing) {
+        imported.stats = local.stats
+        imported.counters = local.counters
+        imported.stat_points_locked = local.stat_points_locked
+        imported.sheet_preset_locked = local.sheet_preset_locked
+      }
       scheduleSave(imported)
     } catch {
-      window.alert('Ошибка загрузки листика. Неверный JSON или повреждённый файл.')
+      window.alert('Ошибка загрузки листика. Неверный/чужой зашифрованный файл или повреждённый JSON.')
     } finally {
       if (importInputRef.current) importInputRef.current.value = ''
     }
@@ -585,12 +701,17 @@ export function CharacterSheet({
       const hpSpent = Number(patchedStat.value)
       if (Number.isFinite(hpSpent)) {
         const normalizedSpent = Math.max(0, Math.round(hpSpent))
+        const hpMax = getHpCounterMaxFromHpStat(
+          normalizedSpent,
+          local.sheet_preset_id ?? null,
+          local.class_status
+        )
         const hpIdx = finalCounters.findIndex((c) => isHealthCounter(c.name))
         finalStats = finalStats.map((s) => (s.id === id ? { ...s, value: String(normalizedSpent) } : s))
         if (hpIdx >= 0) {
           finalCounters = finalCounters.map((c, i) =>
             i === hpIdx
-              ? { ...c, max: normalizedSpent, current: Math.min(c.current, normalizedSpent) }
+              ? { ...c, max: hpMax, current: Math.min(c.current, hpMax) }
               : c
           )
         }
@@ -670,7 +791,12 @@ export function CharacterSheet({
       })
       return
     }
-    const nextHpStatValue = String(Math.max(0, Math.round(Number(changed.max) || 0)))
+    const nextHpBase = inferBaseHpStatFromFinalMax(
+      Math.max(0, Math.round(Number(changed.max) || 0)),
+      local.sheet_preset_id ?? null,
+      local.class_status
+    )
+    const nextHpStatValue = String(nextHpBase)
     const nextStats = local.stats.map((s) => (isHpStat(s.name) ? { ...s, value: nextHpStatValue } : s))
     const syncedCounters = syncHintCounter(
       nextStats,
@@ -707,6 +833,11 @@ export function CharacterSheet({
     if (isHpStat(stat.name) && hpIdx >= 0) {
       const currentSpent = Math.max(0, Math.round(currentStat))
       const nextSpent = Math.max(0, currentSpent + delta)
+      const nextHpMax = getHpCounterMaxFromHpStat(
+        nextSpent,
+        local.sheet_preset_id ?? null,
+        local.class_status
+      )
       const nextStats = local.stats.map((s) =>
         s.id === statId ? { ...s, value: String(nextSpent) } : s
       )
@@ -714,7 +845,7 @@ export function CharacterSheet({
         nextStats,
         local.counters.map((c, i) => {
           if (i === pointsIdx) return { ...c, current: Math.max(0, c.current - delta) }
-          if (i === hpIdx) return { ...c, max: nextSpent, current: Math.min(c.current, nextSpent) }
+          if (i === hpIdx) return { ...c, max: nextHpMax, current: Math.min(c.current, nextHpMax) }
           return c
         }),
         local.sheet_preset_id ?? null,
