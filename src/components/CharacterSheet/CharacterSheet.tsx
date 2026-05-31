@@ -90,7 +90,6 @@ function getTextFieldMaxLength(
   fieldName: string
 ): number | null {
   const normalized = String(fieldName ?? '').trim().toLowerCase()
-  if (presetId === 'engineer' && (normalized === 'кпк' || normalized === 'инвентарь')) return 45
   if (presetId === 'overcomer' && normalized === 'кузница вдохновения') return 25
   if (isInventoryLikeField(fieldName)) return 30
   return null
