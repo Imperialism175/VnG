@@ -27,7 +27,6 @@ export function GmPlayerSheets({
 }: GmPlayerSheetsProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [npcName, setNpcName] = useState('')
-  const [viewAsCharacter, setViewAsCharacter] = useState(false)
 
   const roster = useMemo<RosterEntry[]>(() => {
     const entries: RosterEntry[] = []
@@ -137,23 +136,13 @@ export function GmPlayerSheets({
       {active?.character ? (
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-vng-muted">
-              Режим просмотра: {viewAsCharacter ? 'Эмуляция владельца листа' : 'ГМ'}
-            </p>
+            <p className="text-xs text-vng-muted">Режим просмотра: ГМ</p>
             <div className="flex items-center gap-2">
               {active.isNpc && (
                 <Button type="button" size="sm" variant="danger" onClick={handleDeleteNpc}>
                   Удалить НПС
                 </Button>
               )}
-              <Button
-                type="button"
-                size="sm"
-                variant={viewAsCharacter ? 'secondary' : 'ghost'}
-                onClick={() => setViewAsCharacter((v) => !v)}
-              >
-                {viewAsCharacter ? 'Режим ГМ' : 'От лица игрока/персонажа'}
-              </Button>
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto">
@@ -161,9 +150,7 @@ export function GmPlayerSheets({
               key={active.character.id}
               character={active.character}
               onChange={onSave}
-              gmEditing={!viewAsCharacter}
-              readOnly={false}
-              restrictedView={false}
+              gmEditing
             />
           </div>
         </div>
