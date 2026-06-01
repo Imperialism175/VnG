@@ -71,11 +71,12 @@ interface RoomContextValue {
   rollDice: (opts: {
     count: number
     sides: DiceSides
+    expression?: string
     scaleStatName?: string | null
     scaleStatValue?: number | null
     desiredAbilityLevel?: number | null
   }) => void
-  rerollInspired: (opts: { count: number; sides: DiceSides; modifier: number }) => void
+  rerollInspired: (opts: { count: number; sides: DiceSides; modifier: number; expression?: string }) => void
   sendChat: (text: string) => void
   transferGm: (newGmId: string) => void
   publishEncounter: (encounter: Omit<Encounter, 'room_id' | 'is_active'>) => void
@@ -409,6 +410,7 @@ export function RoomProvider({
   const rollDice = useCallback((opts: {
     count: number
     sides: DiceSides
+    expression?: string
     scaleStatName?: string | null
     scaleStatValue?: number | null
     desiredAbilityLevel?: number | null
@@ -417,6 +419,7 @@ export function RoomProvider({
       type: 'DICE_ROLL',
       count: opts.count,
       sides: opts.sides,
+      expression: opts.expression,
       modifier: 0,
       scale_stat_name: opts.scaleStatName ?? null,
       scale_stat_value: opts.scaleStatValue ?? 0,
@@ -424,7 +427,7 @@ export function RoomProvider({
     })
   }, [])
 
-  const rerollInspired = useCallback((opts: { count: number; sides: DiceSides; modifier: number }) => {
+  const rerollInspired = useCallback((opts: { count: number; sides: DiceSides; modifier: number; expression?: string }) => {
     socketRef.current?.send({ type: 'DICE_REROLL_INSPIRED', ...opts })
   }, [])
 

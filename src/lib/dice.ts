@@ -32,7 +32,7 @@ export function parseAndRoll(expression: string): DiceRollResult {
       const count = match[1] ? parseInt(match[1], 10) : 1
       const sides = parseInt(match[2], 10)
       if (count < 1 || count > 100) throw new Error('Количество кубов: от 1 до 100')
-      if (![3, 4, 6, 8, 10, 12, 20, 100].includes(sides)) {
+      if (![3, 4, 5, 6, 8, 10, 12, 20, 100].includes(sides)) {
         throw new Error(`Неподдерживаемый куб: d${sides}`)
       }
       for (let i = 0; i < count; i++) {

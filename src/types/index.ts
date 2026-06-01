@@ -131,7 +131,7 @@ export interface Encounter {
   created_at?: string
 }
 
-export type DiceSides = 3 | 4 | 6 | 8 | 10 | 12 | 20 | 100
+export type DiceSides = 3 | 4 | 5 | 6 | 8 | 10 | 12 | 20 | 100
 
 export interface DiceRollResult {
   expression: string

@@ -1,5 +1,5 @@
 const DICE_PATTERN = /(\d*)d(\d+)/gi
-const ALLOWED = [3, 4, 6, 8, 10, 12, 20, 100]
+const ALLOWED = [3, 4, 5, 6, 8, 10, 12, 20, 100]
 const MAX_DICE_PER_ROLL = 10
 
 function rollDie(sides) {

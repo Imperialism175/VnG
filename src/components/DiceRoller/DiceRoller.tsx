@@ -11,11 +11,12 @@ interface DiceRollerProps {
   onRoll: (opts: {
     count: number
     sides: DiceSides
+    expression?: string
     scaleStatName?: string | null
     scaleStatValue?: number | null
     desiredAbilityLevel?: number | null
   }) => void
-  onReroll?: (opts: { count: number; sides: DiceSides; modifier: number }) => boolean
+  onReroll?: (opts: { count: number; sides: DiceSides; modifier: number; expression?: string }) => boolean
   playerId: string
   rollEvents: RollEvent[]
   statOptions?: string[]
@@ -173,6 +174,8 @@ export function DiceRoller({
   const blockHint = !canRoll && !isGm
     ? 'ГМ должен разрешить вам бросок (кнопка с кубиком в списке игроков слева).'
     : null
+  const wandererExpression =
+    selectedSides === 20 && effectiveWandererMode ? `${diceCount}d5+${diceCount}d12` : undefined
 
   function handleRoll() {
     if (rollLocked || rolling) return
@@ -185,6 +188,7 @@ export function DiceRoller({
     onRoll({
       count: diceCount,
       sides: selectedSides,
+      expression: wandererExpression,
       scaleStatName: scaleStatName || null,
       scaleStatValue: scaleStatValue ?? 0,
       desiredAbilityLevel:
@@ -194,7 +198,12 @@ export function DiceRoller({
 
   function handleReroll() {
     if (rolling || rerolling || !display || !onReroll) return
-    const ok = onReroll({ count: diceCount, sides: selectedSides, modifier: scaleStatValue ?? 0 })
+    const ok = onReroll({
+      count: diceCount,
+      sides: selectedSides,
+      modifier: scaleStatValue ?? 0,
+      expression: wandererExpression,
+    })
     if (!ok) return
     setRerolling(true)
     pendingRef.current = true

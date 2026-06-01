@@ -299,14 +299,12 @@ function GameRoomContent() {
       : [],
     onReroll: session.isGm
       ? undefined
-      : (opts: { count: number; sides: number; modifier: number }) => {
+      : (opts: { count: number; sides: 3 | 4 | 5 | 6 | 8 | 10 | 12 | 20 | 100; modifier: number; expression?: string }) => {
           const char = myCharacter
           if (!char) return false
           const inspiration = char.counters.find((c) => /вдох|inspir/i.test(c.name))
           if (!inspiration || inspiration.current <= 0) return false
-          rerollInspired(
-            opts as { count: number; sides: 3 | 4 | 6 | 8 | 10 | 12 | 20 | 100; modifier: number }
-          )
+          rerollInspired(opts)
           return true
         },
   }
