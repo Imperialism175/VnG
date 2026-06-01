@@ -44,6 +44,8 @@ interface RollDisplay {
   total: number
   modifier: number
   sides: DiceSides
+  expression?: string
+  jackpot?: boolean
 }
 
 function toRollDisplay(event: RollEvent, fallbackSides: DiceSides): RollDisplay | null {
@@ -57,6 +59,8 @@ function toRollDisplay(event: RollEvent, fallbackSides: DiceSides): RollDisplay 
     total: event.total,
     modifier: event.modifier ?? 0,
     sides: (event.sides as DiceSides) || fallbackSides,
+    expression: event.expression,
+    jackpot: Boolean(event.jackpot),
   }
 }
 
@@ -93,6 +97,7 @@ export function DiceRoller({
   const effectiveStatValues = selectedGmProfile?.statValues ?? statValues
   const effectiveStatScaleValues = selectedGmProfile?.statScaleValues ?? statScaleValues
   const effectiveWandererMode = selectedGmProfile?.wandererMode ?? wandererMode
+  const isWandererPairMode = selectedSides === 20 && effectiveWandererMode
 
   useEffect(() => {
     if (!isGm) return
@@ -112,6 +117,12 @@ export function DiceRoller({
       setScaleStatValue(null)
     }
   }, [effectiveStatOptions, scaleStatName])
+
+  useEffect(() => {
+    if (isWandererPairMode && diceCount !== 1) {
+      setDiceCount(1)
+    }
+  }, [isWandererPairMode, diceCount])
 
 
   const pendingRef = useRef(false)
@@ -151,12 +162,16 @@ export function DiceRoller({
     if (!rolling || !pendingRef.current) return
 
     const id = window.setInterval(() => {
-      setTumbleValues(randomDieValues(diceCount, selectedSides))
+      if (isWandererPairMode) {
+        setTumbleValues([randomDieValues(1, 5)[0], randomDieValues(1, 12)[0]])
+      } else {
+        setTumbleValues(randomDieValues(diceCount, selectedSides))
+      }
       setTumbleTick((n) => n + 1)
     }, 85)
 
     return () => window.clearInterval(id)
-  }, [rolling, diceCount, selectedSides])
+  }, [rolling, diceCount, selectedSides, isWandererPairMode])
 
   useEffect(() => {
     if (!rolling) return
@@ -175,7 +190,7 @@ export function DiceRoller({
     ? 'ГМ должен разрешить вам бросок (кнопка с кубиком в списке игроков слева).'
     : null
   const wandererExpression =
-    selectedSides === 20 && effectiveWandererMode ? `${diceCount}d5+${diceCount}d12` : undefined
+    isWandererPairMode ? '1d5+1d12' : undefined
 
   function handleRoll() {
     if (rollLocked || rolling) return
@@ -184,9 +199,13 @@ export function DiceRoller({
     setRolling(true)
     setDisplay(null)
     setTumbleTick(0)
-    setTumbleValues(randomDieValues(diceCount, selectedSides))
+    if (isWandererPairMode) {
+      setTumbleValues([randomDieValues(1, 5)[0], randomDieValues(1, 12)[0]])
+    } else {
+      setTumbleValues(randomDieValues(diceCount, selectedSides))
+    }
     onRoll({
-      count: diceCount,
+      count: isWandererPairMode ? 1 : diceCount,
       sides: selectedSides,
       expression: wandererExpression,
       scaleStatName: scaleStatName || null,
@@ -210,16 +229,21 @@ export function DiceRoller({
     rollStartedAt.current = Date.now()
     setRolling(true)
     setTumbleTick(0)
-    setTumbleValues(randomDieValues(diceCount, selectedSides))
+    if (isWandererPairMode) {
+      setTumbleValues([randomDieValues(1, 5)[0], randomDieValues(1, 12)[0]])
+    } else {
+      setTumbleValues(randomDieValues(diceCount, selectedSides))
+    }
   }
 
   const pitSides = display?.sides ?? selectedSides
   const pitValues = rolling ? tumbleValues : display?.values ?? []
+  const pitDieSides = isWandererPairMode ? ([10, 6] as DiceSides[]) : undefined
   const mod = display?.modifier ?? (scaleStatValue ?? 0)
   const total = display?.total
   const readoutExpression =
-    selectedSides === 20 && effectiveWandererMode
-      ? `${diceCount} × (d5 + d12)`
+    isWandererPairMode
+      ? `d5 + d12`
       : `${diceCount}d${selectedSides}`
 
   useEffect(() => {
@@ -253,7 +277,8 @@ export function DiceRoller({
           <div className="grid grid-cols-4 gap-2">
             {DICE_TYPES.map(({ label, sides }) => {
               const active = selectedSides === sides
-              const renderedLabel = sides === 20 && effectiveWandererMode ? 'Д5 + Д12' : label
+              const wandererCard = sides === 20 && effectiveWandererMode
+              const renderedLabel = wandererCard ? 'ДЕСЯТИУГОЛЬНИК + ШЕСТИУГОЛЬНИК' : label
               return (
                 <button
                   key={sides}
@@ -264,7 +289,15 @@ export function DiceRoller({
                   aria-pressed={active}
                   aria-label={label}
                 >
-                  <DiceIcon sides={sides} size={20} />
+                  {wandererCard ? (
+                    <span className="inline-flex items-center gap-1">
+                      <DiceIcon sides={10} size={18} />
+                      <span className="text-vng-muted">+</span>
+                      <DiceIcon sides={6} size={18} />
+                    </span>
+                  ) : (
+                    <DiceIcon sides={sides} size={20} />
+                  )}
                   <span className="text-sm font-bold tracking-wide uppercase">
                     {active ? `► ${renderedLabel} ◄` : renderedLabel}
                   </span>
@@ -286,9 +319,10 @@ export function DiceRoller({
                 const n = Number(e.target.value)
                 setDiceCount(Number.isFinite(n) ? Math.max(1, Math.min(10, Math.round(n))) : 1)
               }}
-              disabled={rolling}
+              disabled={rolling || isWandererPairMode}
               className="vng-tui-input"
             />
+            {isWandererPairMode && <span className="text-[11px] text-vng-muted">Для бродяги всегда 1 бросок пары d5+d12.</span>}
           </label>
         </div>
 
@@ -391,10 +425,12 @@ export function DiceRoller({
         <DiceThrowPit
           sides={pitSides}
           values={pitValues}
+          dieSides={pitDieSides}
           rolling={rolling}
           tumbleTick={tumbleTick}
           modifier={mod}
           total={rolling ? undefined : total}
+          jackpot={Boolean(display?.jackpot)}
         />
       </div>
     </Panel>

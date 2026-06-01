@@ -181,6 +181,12 @@ export function normalizeRollEvent(raw: Record<string, unknown>): RollEvent {
         : typeof raw.rerollInspiration === 'boolean'
           ? raw.rerollInspiration
           : false,
+    jackpot:
+      typeof raw.jackpot === 'boolean'
+        ? raw.jackpot
+        : typeof raw.isJackpot === 'boolean'
+          ? raw.isJackpot
+          : false,
   }
 }
 

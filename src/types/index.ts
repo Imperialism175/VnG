@@ -89,6 +89,7 @@ export interface RollEvent {
   ability_level?: number | null
   ability_usable?: boolean | null
   reroll_inspiration?: boolean
+  jackpot?: boolean
 }
 
 export interface ChatMessage {

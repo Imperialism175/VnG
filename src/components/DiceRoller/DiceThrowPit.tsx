@@ -5,16 +5,20 @@ import { DieVisual } from '@/components/DiceRoller/DieVisual'
 interface DiceThrowPitProps {
   sides: DiceSides
   values: number[]
+  dieSides?: DiceSides[]
   rolling: boolean
   tumbleTick: number
   modifier: number
   total?: number
+  jackpot?: boolean
 }
 
-export function DiceThrowPit({ sides, values, rolling, tumbleTick, modifier, total }: DiceThrowPitProps) {
+export function DiceThrowPit({ sides, values, dieSides, rolling, tumbleTick, modifier, total, jackpot }: DiceThrowPitProps) {
   void tumbleTick
   const hasDice = values.length > 0
   const sum = values.reduce((a, b) => a + b, 0)
+  const perDieSides = values.map((_, i) => dieSides?.[i] ?? sides)
+  const pairFormula = !rolling && hasDice && values.length === 2
 
   return (
     <div
@@ -33,18 +37,19 @@ export function DiceThrowPit({ sides, values, rolling, tumbleTick, modifier, tot
             className={`vng-die-visual ${rolling ? 'vng-die-visual--rolling' : ''}`}
             style={rolling ? rollingStyle(i, values.length) : settleStyle(i, values.length)}
           >
-            <DieVisual value={value} sides={sides} rolling={rolling} />
+            <DieVisual value={value} sides={perDieSides[i] ?? sides} rolling={rolling} />
           </div>
         ))}
 
       {!rolling && hasDice && total !== undefined && (
         <p className="vng-dice-throw-pit__total vng-mono">
           <span className="text-vng-muted">
-            {sum}
+            {pairFormula ? `${values[0]} + ${values[1]}` : sum}
             {modifier !== 0 ? (modifier > 0 ? ` + ${modifier}` : ` − ${Math.abs(modifier)}`) : ''}
             {' = '}
           </span>
           <span className="vng-dice-throw-pit__total-value">{total}</span>
+          {jackpot && <span className="text-vng-amber">{' | ДЖЕКПОТ 20+20'}</span>}
         </p>
       )}
     </div>

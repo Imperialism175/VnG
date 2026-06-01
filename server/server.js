@@ -705,6 +705,16 @@ wss.on('connection', (ws, req) => {
       try {
         const char = room.characters.get(playerId)
         const r = parseAndRoll(expr)
+        const compactExpr = String(r.expression ?? '').replace(/\s+/g, '')
+        const isWandererPair = /^1d5\+1d12$/i.test(compactExpr)
+        const firstWandererDie = Number(r.rolls?.[0] ?? 0)
+        const secondWandererDie = Number(r.rolls?.[1] ?? 0)
+        const jackpot =
+          isWandererPair &&
+          firstWandererDie >= 1 &&
+          secondWandererDie >= 1 &&
+          firstWandererDie === secondWandererDie &&
+          !(firstWandererDie === 1 && secondWandererDie === 1)
         const scaleStatName = String(msg.scale_stat_name ?? '').trim()
         const requestedScaleValue = Number(msg.scale_stat_value)
         const scaleStatRaw = scaleStatName
@@ -712,7 +722,8 @@ wss.on('connection', (ws, req) => {
           : null
         const scaleStatValue = parseFiniteStatValue(scaleStatRaw)
         const scaledModifier = Number.isFinite(requestedScaleValue) ? requestedScaleValue : (scaleStatValue ?? 0)
-        const scaledTotal = r.total + scaledModifier
+        const baseTotal = jackpot ? 40 : r.total
+        const scaledTotal = baseTotal + scaledModifier
 
         let abilityLevel = null
         let abilityUsable = null
@@ -743,6 +754,9 @@ wss.on('connection', (ws, req) => {
         if (scaleStatName) {
           message += ` | стат: ${scaleStatName}`
         }
+        if (jackpot) {
+          message += ' | ДЖЕКПОТ: совпали d5 и d12 (кроме 1+1), считается как 20 + 20'
+        }
         if (abilityLevel !== null) {
           message += ` | способность ур.${abilityLabel ?? abilityLevel}: ${abilityUsable ? 'МОЖНО ИСПОЛЬЗОВАТЬ' : 'НЕЛЬЗЯ'}`
         }
@@ -757,6 +771,7 @@ wss.on('connection', (ws, req) => {
           rolls: r.rolls,
           modifier: scaledModifier,
           sides: msg.sides ?? null,
+          jackpot,
           scale_stat_name: scaleStatName || null,
           scale_stat_value: scaledModifier,
           ability_level: abilityLevel,
@@ -803,6 +818,17 @@ wss.on('connection', (ws, req) => {
       const expr = msg.expression ?? buildRollExpression(msg.count ?? 1, msg.sides ?? 20, msg.modifier ?? 0)
       try {
         const r = parseAndRoll(expr)
+        const compactExpr = String(r.expression ?? '').replace(/\s+/g, '')
+        const isWandererPair = /^1d5\+1d12$/i.test(compactExpr)
+        const firstWandererDie = Number(r.rolls?.[0] ?? 0)
+        const secondWandererDie = Number(r.rolls?.[1] ?? 0)
+        const jackpot =
+          isWandererPair &&
+          firstWandererDie >= 1 &&
+          secondWandererDie >= 1 &&
+          firstWandererDie === secondWandererDie &&
+          !(firstWandererDie === 1 && secondWandererDie === 1)
+        const rollTotal = jackpot ? 40 : r.total
 
         const updatedChar = {
           ...char,
@@ -820,13 +846,14 @@ wss.on('connection', (ws, req) => {
           player_id: playerId,
           player_name: player.name,
           expression: r.expression,
-          total: r.total,
-          details: `[${r.rolls.join(', ')}] = ${r.total}`,
+          total: rollTotal,
+          details: `[${r.rolls.join(', ')}] = ${rollTotal}`,
           rolls: r.rolls,
           modifier: r.modifier,
           sides: msg.sides ?? null,
           player_is_gm: Boolean(player.is_gm),
-          message: `${formatRollChatMessage(player.name, r.expression, r.rolls, r.modifier, r.total, player.is_gm)} (переброс за вдохновение)`,
+          message: `${formatRollChatMessage(player.name, r.expression, r.rolls, r.modifier, rollTotal, player.is_gm)}${jackpot ? ' | ДЖЕКПОТ: 20 + 20' : ''} (переброс за вдохновение)`,
+          jackpot,
           reroll_inspiration: true,
           created_at: new Date().toISOString(),
         }
