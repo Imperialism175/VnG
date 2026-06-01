@@ -311,14 +311,14 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
   },
   {
     id: 'npc-vessel-deltarune',
-    label: 'Лист НПС/Сосуда/Дельтаруна',
+    label: 'Лист Сосуда',
     points: '50 очков',
     pointsValue: 50,
     notes:
       'Вы играете за НПС как Ядро/Душа, 5 заклинаний 1 уровня, 4 слота инвентаря, 50 очков характеристик.',
     apply: (base) =>
       withBase(base, {
-        classStatus: 'Лист НПС/Сосуда/Дельтаруна',
+        classStatus: 'Лист Сосуда',
         skillPoints: 50,
         textOverrides: { Инвентарь: 'Инвентарь (4 слота)' },
         extraText: [
@@ -345,7 +345,14 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
       withBase(base, {
         classStatus: 'Лист Бродяги',
         skillPoints: 29,
-        extraStats: [stat('УРОВЕНЬ', '5'), stat('ПРЕИМУЩЕСТВО В СОРЕВНОВАТЕЛЬНЫХ БРОСКАХ', '1')],
+        textValues: {
+          Способности:
+            'Уровень 1:\n\n' +
+            'Уровень 2:\n\n' +
+            'Уровень 3:\n\n' +
+            'Уровень 4:\n\n' +
+            'Уровень 5:\n',
+        },
         extraText: [
           textField(
             'Правило листика',
@@ -430,8 +437,8 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
       withBase(base, {
         classStatus: 'Листок Альт Кайна',
         skillPoints: 29,
+        textOverrides: { Инвентарь: 'Мой мешочек' },
         extraText: [
-          textField('Мой Мешочек', ''),
           textField('Правило листика', 'Артефакты распадаются на части; можно собирать новые предметы.'),
           textField('Очки на характеристики', '29'),
         ],
@@ -825,6 +832,7 @@ function normalizePresetIdByClassStatus(classStatus: string): SheetPresetId | nu
   if (value.includes('крит')) return 'crit-hit'
   if (value.includes('комбо лист')) return 'combo-listik'
   if (value.includes('бродяг')) return 'wanderer'
+  if (value.includes('сосуд') || value.includes('дельтарун')) return 'npc-vessel-deltarune'
   if (value.includes('ядролист')) return 'core-sheet'
   if (value.includes('литератур')) return 'literature'
   return null

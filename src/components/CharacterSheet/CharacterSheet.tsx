@@ -231,9 +231,9 @@ function parseAbilityLevels(value: string): Record<number, string> {
   return result
 }
 
-function buildAbilityLevelsText(levels: Record<number, string>): string {
+function buildAbilityLevelsTextWithMax(levels: Record<number, string>, maxLevel: number): string {
   const rows: string[] = []
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= maxLevel; i++) {
     rows.push(`Уровень ${i}:\n${String(levels[i] ?? '')}`)
   }
   return rows.join('\n\n')
@@ -1219,6 +1219,8 @@ export function CharacterSheet({
                           ? 'condemned'
                           : resolvedPresetId === 'interleaf'
                             ? 'interleaf'
+                            : resolvedPresetId === 'wanderer'
+                              ? 'wanderer'
                           : 'default'
                     }
                     onChange={(next) => updateTextField(field.id, { value: next })}
@@ -1513,12 +1515,13 @@ function AbilityLevelsTable({
 }: {
   value: string
   readOnly?: boolean
-  mode?: 'default' | 'daredevil' | 'condemned' | 'interleaf'
+  mode?: 'default' | 'daredevil' | 'condemned' | 'interleaf' | 'wanderer'
   onChange: (next: string) => void
 }) {
   const isDaredevil = mode === 'daredevil'
   const isCondemned = mode === 'condemned'
   const isInterleaf = mode === 'interleaf'
+  const isWanderer = mode === 'wanderer'
   const defaultLevels = parseAbilityLevels(value)
   const daredevilLevels = parseDaredevilAbilityLevels(value)
   const condemnedLevels = parseCondemnedAbilityLevels(value)
@@ -1541,7 +1544,7 @@ function AbilityLevelsTable({
             label: `Ур. ${key.replace('Уровень ', '')}`,
             value: interleafLevels[key] ?? '',
           }))
-    : Array.from({ length: 7 }, (_, idx) => idx + 1).map((level) => ({
+    : Array.from({ length: isWanderer ? 5 : 7 }, (_, idx) => idx + 1).map((level) => ({
         key: `lvl-${level}`,
         label: `Ур. ${level}`,
         value: defaultLevels[level] ?? '',
@@ -1579,7 +1582,7 @@ function AbilityLevelsTable({
                       } else {
                         const level = Number(String(row.key).replace('lvl-', ''))
                         const nextLevels = { ...defaultLevels, [level]: e.target.value }
-                        onChange(buildAbilityLevelsText(nextLevels))
+                        onChange(buildAbilityLevelsTextWithMax(nextLevels, isWanderer ? 5 : 7))
                       }
                     }}
                     placeholder={
