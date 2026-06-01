@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Crown, DoorOpen, Network, RefreshCw, Server, Users } from 'lucide-react'
 import { apiCreateRoom, apiJoinRoom, apiListRooms, type RoomSummary } from '@/lib/api'
+import { APP_VERSION } from '@/lib/appVersion'
 import { checkServerOnline, getServerHost, setServerHost } from '@/lib/runtime'
 import { getOrCreatePlayerId, saveSession } from '@/lib/utils'
 import { Button, Input } from '@/components/ui/Button'
@@ -125,7 +126,10 @@ export function HomePage() {
   }
 
   return (
-    <div className="vng-page vng-home-page min-h-full flex flex-col">
+    <div className="vng-page vng-home-page min-h-full flex flex-col relative">
+      <div className="absolute top-2 right-2 z-20 px-2 py-1 text-[11px] vng-mono border border-vng-border bg-vng-bg/80 text-vng-muted">
+        Версия {APP_VERSION}
+      </div>
       <header className="vng-dos-hud border-b border-vng-border">
         <div className="vng-home-hero max-w-lg mx-auto px-4 py-6 text-center uppercase">
           <h1 className="vng-home-hero__title text-2xl font-bold mb-2 tracking-widest">VNG TABLETOP RPG</h1>

@@ -315,24 +315,41 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
     points: '50 очков',
     pointsValue: 50,
     notes:
-      'Вы играете за НПС как Ядро/Душа, 5 заклинаний 1 уровня, 4 слота инвентаря, 50 очков характеристик.',
-    apply: (base) =>
-      withBase(base, {
+      '50 очков, инвентарь ограничен 20 символами, 5 непронумерованных уровней заклинаний, характеристики с особыми суффиксами.',
+    apply: (base) => {
+      const prepared = withBase(base, {
         classStatus: 'Лист Сосуда',
         skillPoints: 50,
-        textOverrides: { Инвентарь: 'Инвентарь (4 слота)' },
+        textValues: {
+          Способности:
+            'Способность:\n\n' +
+            'Способность:\n\n' +
+            'Способность:\n\n' +
+            'Способность:\n\n' +
+            'Способность:\n',
+        },
         extraText: [
           textField(
             'Правило листика',
             'Персонаж — НПС-сосуд. Игрок — Ядро/Душа, управляющая телом.'
           ),
-          textField('Заклинания', '5 доступных заклинаний первого уровня'),
-          textField('Приблизительное распределение (~)', '~ СИЛА, ~ ЛОВКОСТЬ, ~ ХАРИЗМА, ~ ИНТЕЛЛЕКТ, ~ УДАЧА'),
+          textField('Заклинания', '5 непронумерованных уровней'),
           textField('Риск бунта', 'Персонаж может взбунтоваться против Ядра'),
           textField('Рекомендация', 'ООООЧЕНЬ РЕКОМЕНДУЕТСЯ ИСТОРИЯ'),
           textField('Очки на характеристики', '50'),
         ],
-      }),
+      })
+      return {
+        ...prepared,
+        stats: [
+          stat('Здоровье~', '0'),
+          stat('Сила=', '0'),
+          stat('Ловкость=', '0'),
+          stat('Харизма~', '0'),
+          stat('Покорность', '0'),
+        ],
+      }
+    },
   },
   {
     id: 'wanderer',
@@ -396,7 +413,7 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
       withBase(base, {
         classStatus: 'Лист Крит Удара',
         skillPoints: 36,
-        extraStats: [stat('ШАНС КРИТ УДАРА', '0'), stat('КРИТ УРОН', '0')],
+        extraStats: [stat('ШАНС КРИТ УДАРА', '0')],
         extraText: [
           textField(
             'Правило листика',
@@ -552,12 +569,12 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
     label: 'Лист Преодолителя',
     points: '25 очков',
     pointsValue: 25,
-    notes: 'Бэкграунд заменен на Кузницу вдохновения; ГМ может выдавать очки вдохновения.',
+    notes: 'Описание заменено на Кузницу вдохновения; ГМ может выдавать очки вдохновения.',
     apply: (base) =>
       withBase(base, {
         classStatus: 'Лист Преодолителя',
         skillPoints: 25,
-        textOverrides: { Бэкграунд: 'Кузница вдохновения', Предыстория: 'Кузница вдохновения' },
+        textOverrides: { Описание: 'Кузница вдохновения' },
         extraText: [
           textField('Правило листика', 'Вдохновение можно хранить и тратить на переброс.'),
           textField('Очки на характеристики', '25'),
@@ -675,13 +692,33 @@ function ensureAbilityLevelsTemplate(text: string): string {
   return `${prefix}Уровень 1: \nУровень 2: \nУровень 3: \nУровень 4: \nУровень 5: \nУровень 6: \nУровень 7: `
 }
 
-export function ensureAbilityLevelFields(textFields: TextField[] | undefined): TextField[] {
+function ensureVesselAbilityTemplate(text: string): string {
+  const src = String(text ?? '')
+  if (/способность\s*:/i.test(src)) return src
+  const blocks = src
+    .split(/\n{2,}/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .slice(0, 5)
+  const rows = Array.from({ length: 5 }, (_, i) => blocks[i] ?? '')
+  return rows.map((entry) => `Способность:\n${entry}`).join('\n\n')
+}
+
+export function ensureAbilityLevelFields(
+  textFields: TextField[] | undefined,
+  sheetPresetId?: string | null,
+  classStatus = ''
+): TextField[] {
   const fields = ensureSpecialTextFields(textFields)
+  const resolvedPresetId = resolveCharacterPresetId(sheetPresetId ?? null, classStatus)
   return fields.map((f) => {
     if (f.name.trim().toLowerCase() !== 'способности') return f
     return {
       ...f,
-      value: ensureAbilityLevelsTemplate(f.value),
+      value:
+        resolvedPresetId === 'npc-vessel-deltarune'
+          ? ensureVesselAbilityTemplate(f.value)
+          : ensureAbilityLevelsTemplate(f.value),
     }
   })
 }

@@ -78,9 +78,14 @@ function loadGlobalHallOfFame() {
 }
 
 function saveGlobalHallOfFame(hall) {
-  const safe = sanitizeHallOfFame(hall)
-  mkdirSync(dirname(GLOBAL_LEADERBOARD_FILE), { recursive: true })
-  writeFileSync(GLOBAL_LEADERBOARD_FILE, JSON.stringify(safe, null, 2), 'utf8')
+  try {
+    const safe = sanitizeHallOfFame(hall)
+    mkdirSync(dirname(GLOBAL_LEADERBOARD_FILE), { recursive: true })
+    writeFileSync(GLOBAL_LEADERBOARD_FILE, JSON.stringify(safe, null, 2), 'utf8')
+    return true
+  } catch {
+    return false
+  }
 }
 
 let globalHallOfFame = loadGlobalHallOfFame()
@@ -121,9 +126,45 @@ function ensureSpecialTextFields(textFields) {
 }
 
 function ensureAbilityLevelsText(textFields) {
+  return ensureAbilityLevelsTextForPreset(textFields, null, '')
+}
+
+function resolvePresetIdFromClassStatus(classStatus) {
+  const value = String(classStatus ?? '').trim().toLowerCase()
+  if (!value) return null
+  if (value.includes('сосуд') || value.includes('дельтарун')) return 'npc-vessel-deltarune'
+  return null
+}
+
+function resolvePresetId(sheetPresetId, classStatus) {
+  const valid = ['npc-vessel-deltarune']
+  if (valid.includes(String(sheetPresetId ?? ''))) return String(sheetPresetId)
+  return resolvePresetIdFromClassStatus(classStatus)
+}
+
+function ensureVesselAbilityTemplate(text) {
+  const src = String(text ?? '')
+  if (/способность\s*:/i.test(src)) return src
+  const blocks = src
+    .split(/\n{2,}/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .slice(0, 5)
+  const rows = Array.from({ length: 5 }, (_, i) => blocks[i] ?? '')
+  return rows.map((entry) => `Способность:\n${entry}`).join('\n\n')
+}
+
+function ensureAbilityLevelsTextForPreset(textFields, sheetPresetId, classStatus = '') {
   const fields = ensureSpecialTextFields(textFields)
+  const resolvedPresetId = resolvePresetId(sheetPresetId, classStatus)
   return fields.map((field) => {
     if (String(field?.name ?? '').trim().toLowerCase() !== 'способности') return field
+    if (resolvedPresetId === 'npc-vessel-deltarune') {
+      return {
+        ...field,
+        value: ensureVesselAbilityTemplate(field.value),
+      }
+    }
     const src = String(field?.value ?? '').trim()
     if (/ур(?:овень)?\s*1/i.test(src) || /\blvl\s*1\b/i.test(src)) return field
     const prefix = src ? `${src}\n\n` : ''
@@ -646,7 +687,11 @@ wss.on('connection', (ws, req) => {
         !player.is_gm && targetId === playerId
           ? applyPlayerLocks(existing, { ...base, counters })
           : { text_fields: base.text_fields, stats: base.stats, counters }
-      const resolvedTextFields = ensureAbilityLevelsText(playerLockedPayload.text_fields)
+      const resolvedTextFields = ensureAbilityLevelsTextForPreset(
+        playerLockedPayload.text_fields,
+        base.sheet_preset_id ?? null,
+        base.class_status ?? ''
+      )
       const updated = {
         ...base,
         text_fields: resolvedTextFields,
@@ -1184,10 +1229,13 @@ wss.on('connection', (ws, req) => {
         return
       }
       globalHallOfFame = sanitizeHallOfFame(msg.hall_of_fame ?? msg)
-      saveGlobalHallOfFame(globalHallOfFame)
+      const persisted = saveGlobalHallOfFame(globalHallOfFame)
       for (const targetRoom of rooms.values()) {
         targetRoom.hallOfFame = cloneHallOfFame(globalHallOfFame)
         broadcast(targetRoom, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(targetRoom) })
+      }
+      if (!persisted) {
+        send(ws, { type: 'ERROR', message: 'Лидерборд обновлён, но не удалось сохранить его на диск сервера' })
       }
     }
 

@@ -387,7 +387,11 @@ export function RoomProvider({
     (character: Character) => {
       const normalizedCharacter: Character = {
         ...character,
-        text_fields: ensureAbilityLevelFields(ensureSpecialTextFields(character.text_fields)),
+        text_fields: ensureAbilityLevelFields(
+          ensureSpecialTextFields(character.text_fields),
+          character.sheet_preset_id ?? null,
+          character.class_status ?? ''
+        ),
         counters: ensureInspirationCounter(character.counters),
       }
       if (character.player_id === initialSession.playerId) {
@@ -610,7 +614,6 @@ export function RoomProvider({
   }, [])
 
   const setHallOfFame = useCallback((hall: HallOfFame, password: string) => {
-    setHallOfFameState(hall)
     socketRef.current?.send({ type: 'SET_HALL_OF_FAME', hall_of_fame: hall, leaderboard_password: password })
   }, [])
 

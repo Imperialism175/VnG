@@ -90,6 +90,8 @@ function getTextFieldMaxLength(
   fieldName: string
 ): number | null {
   const normalized = String(fieldName ?? '').trim().toLowerCase()
+  if (presetId === 'engineer' && normalized === 'кпк') return 45
+  if (presetId === 'npc-vessel-deltarune' && isInventoryLikeField(fieldName)) return 20
   if (presetId === 'overcomer' && normalized === 'кузница вдохновения') return 25
   if (isInventoryLikeField(fieldName)) return 30
   return null
@@ -366,6 +368,40 @@ function parseInterleafAbilityLevels(value: string): Record<string, string> {
 
 function buildInterleafAbilityLevelsText(levels: Record<string, string>): string {
   return INTERLEAF_ABILITY_KEYS.map((key) => `${key}:\n${String(levels[key] ?? '')}`).join('\n\n')
+}
+
+const VESSEL_ABILITY_KEYS = [
+  'Способность 1',
+  'Способность 2',
+  'Способность 3',
+  'Способность 4',
+  'Способность 5',
+] as const
+
+function parseVesselAbilityLevels(value: string): Record<string, string> {
+  const src = String(value ?? '')
+  const result = Object.fromEntries(VESSEL_ABILITY_KEYS.map((k) => [k, ''])) as Record<string, string>
+  const headerRe = /(?:^|\n)[ \t]*(способность)[ \t]*:[ \t]*/gi
+  const matches: Array<{ index: number; start: number; contentStart: number }> = []
+  let m: RegExpExecArray | null = null
+  while ((m = headerRe.exec(src)) !== null) {
+    matches.push({ index: matches.length, start: m.index, contentStart: headerRe.lastIndex })
+  }
+  if (matches.length === 0) return result
+  for (let i = 0; i < matches.length && i < VESSEL_ABILITY_KEYS.length; i++) {
+    const current = matches[i]
+    const next = matches[i + 1]
+    const end = next ? next.start : src.length
+    let chunk = src.slice(current.contentStart, end)
+    if (chunk.startsWith('\n')) chunk = chunk.slice(1)
+    if (chunk.endsWith('\n')) chunk = chunk.slice(0, -1)
+    result[VESSEL_ABILITY_KEYS[i]] = chunk
+  }
+  return result
+}
+
+function buildVesselAbilityLevelsText(levels: Record<string, string>): string {
+  return VESSEL_ABILITY_KEYS.map((key) => `Способность:\n${String(levels[key] ?? '')}`).join('\n\n')
 }
 
 type SheetExportPayload = {
@@ -1219,6 +1255,8 @@ export function CharacterSheet({
                           ? 'condemned'
                           : resolvedPresetId === 'interleaf'
                             ? 'interleaf'
+                            : resolvedPresetId === 'npc-vessel-deltarune'
+                              ? 'vessel'
                             : resolvedPresetId === 'wanderer'
                               ? 'wanderer'
                           : 'default'
@@ -1515,17 +1553,19 @@ function AbilityLevelsTable({
 }: {
   value: string
   readOnly?: boolean
-  mode?: 'default' | 'daredevil' | 'condemned' | 'interleaf' | 'wanderer'
+  mode?: 'default' | 'daredevil' | 'condemned' | 'interleaf' | 'wanderer' | 'vessel'
   onChange: (next: string) => void
 }) {
   const isDaredevil = mode === 'daredevil'
   const isCondemned = mode === 'condemned'
   const isInterleaf = mode === 'interleaf'
   const isWanderer = mode === 'wanderer'
+  const isVessel = mode === 'vessel'
   const defaultLevels = parseAbilityLevels(value)
   const daredevilLevels = parseDaredevilAbilityLevels(value)
   const condemnedLevels = parseCondemnedAbilityLevels(value)
   const interleafLevels = parseInterleafAbilityLevels(value)
+  const vesselLevels = parseVesselAbilityLevels(value)
   const rows = isDaredevil
     ? DAREDEVIL_ABILITY_KEYS.map((key) => ({
         key,
@@ -1543,6 +1583,12 @@ function AbilityLevelsTable({
             key,
             label: `Ур. ${key.replace('Уровень ', '')}`,
             value: interleafLevels[key] ?? '',
+          }))
+      : isVessel
+        ? VESSEL_ABILITY_KEYS.map((key) => ({
+            key,
+            label: 'Способность',
+            value: vesselLevels[key] ?? '',
           }))
     : Array.from({ length: isWanderer ? 5 : 7 }, (_, idx) => idx + 1).map((level) => ({
         key: `lvl-${level}`,
@@ -1579,6 +1625,9 @@ function AbilityLevelsTable({
                       } else if (isInterleaf) {
                         const nextLevels = { ...interleafLevels, [row.key]: e.target.value }
                         onChange(buildInterleafAbilityLevelsText(nextLevels))
+                      } else if (isVessel) {
+                        const nextLevels = { ...vesselLevels, [row.key]: e.target.value }
+                        onChange(buildVesselAbilityLevelsText(nextLevels))
                       } else {
                         const level = Number(String(row.key).replace('lvl-', ''))
                         const nextLevels = { ...defaultLevels, [level]: e.target.value }
@@ -1592,6 +1641,8 @@ function AbilityLevelsTable({
                           ? `Способности ${row.label.replace('Ур. ', '')} уровня (по одной с новой строки)`
                           : isInterleaf
                             ? `Способности ${row.label.replace('Ур. ', '')} уровня (по одной с новой строки)`
+                          : isVessel
+                            ? 'Непронумерованная способность'
                         : `Способности ${row.label.replace('Ур. ', '')} уровня (по одной с новой строки)`
                     }
                   />
