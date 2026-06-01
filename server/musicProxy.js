@@ -164,14 +164,31 @@ function decodePlaylistCursor(value) {
 }
 
 async function fetchYoutubePlaylistBootstrap(playlistId) {
-  const pageUrl = `https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}&hl=ru`
-  const pageRes = await fetch(pageUrl, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (VnG playlist loader)' },
-  })
-  if (!pageRes.ok) {
-    return { error: `Не удалось открыть страницу плейлиста (HTTP ${pageRes.status})`, initialData: null, apiKey: '', context: null }
+  const urls = [
+    `https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}&hl=ru`,
+    `https://music.youtube.com/playlist?list=${encodeURIComponent(playlistId)}&hl=ru`,
+  ]
+  let html = ''
+  let lastStatus = 0
+  for (const pageUrl of urls) {
+    const pageRes = await fetch(pageUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (VnG playlist loader)' },
+    })
+    if (!pageRes.ok) {
+      lastStatus = pageRes.status
+      continue
+    }
+    html = await pageRes.text()
+    if (html) break
   }
-  const html = await pageRes.text()
+  if (!html) {
+    return {
+      error: `Не удалось открыть страницу плейлиста (HTTP ${lastStatus || 404})`,
+      initialData: null,
+      apiKey: '',
+      context: null,
+    }
+  }
   const initialData =
     extractJsonObjectFrom(html, 'var ytInitialData = ') ??
     extractJsonObjectFrom(html, 'window["ytInitialData"] = ')
@@ -188,15 +205,29 @@ async function fetchYoutubePlaylistBootstrap(playlistId) {
         gl: 'US',
       },
     }
-  return { error: null, initialData, apiKey, context }
+  const clientName =
+    Number(ytcfg?.INNERTUBE_CLIENT_NAME ?? ytcfg?.INNERTUBE_CONTEXT_CLIENT_NAME ?? context?.client?.clientName ?? 1) || 1
+  const clientVersion = String(
+    ytcfg?.INNERTUBE_CLIENT_VERSION ?? ytcfg?.INNERTUBE_CONTEXT_CLIENT_VERSION ?? context?.client?.clientVersion ?? '2.20240601.00.00'
+  ).trim()
+  const visitorData = String(ytcfg?.VISITOR_DATA ?? context?.client?.visitorData ?? '').trim()
+  return { error: null, initialData, apiKey, context, clientName, clientVersion, visitorData }
 }
 
-async function fetchYoutubePlaylistContinuationPage(apiKey, context, continuationToken) {
+async function fetchYoutubePlaylistContinuationPage(apiKey, context, continuationToken, headersMeta = {}) {
+  const clientName = Number(headersMeta.clientName ?? 1) || 1
+  const clientVersion = String(headersMeta.clientVersion ?? context?.client?.clientVersion ?? '2.20240601.00.00').trim()
+  const visitorData = String(headersMeta.visitorData ?? context?.client?.visitorData ?? '').trim()
   const contRes = await fetch(`https://www.youtube.com/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'User-Agent': 'Mozilla/5.0 (VnG playlist loader)',
+      'X-YouTube-Client-Name': String(clientName),
+      'X-YouTube-Client-Version': clientVersion,
+      ...(visitorData ? { 'X-Goog-Visitor-Id': visitorData } : {}),
+      Referer: 'https://www.youtube.com/',
+      Origin: 'https://www.youtube.com',
     },
     body: JSON.stringify({
       context,
@@ -397,7 +428,11 @@ export async function fetchPlaylistEntries(url, cursor = '') {
       while (nextToken && apiKey && !seenTokens.has(nextToken) && entriesMap.size < MAX_TRACKS && pages < MAX_PAGES) {
         seenTokens.add(nextToken)
         pages += 1
-        const continuationPage = await fetchYoutubePlaylistContinuationPage(apiKey, bootstrap.context, nextToken)
+        const continuationPage = await fetchYoutubePlaylistContinuationPage(apiKey, bootstrap.context, nextToken, {
+          clientName: bootstrap.clientName,
+          clientVersion: bootstrap.clientVersion,
+          visitorData: bootstrap.visitorData,
+        })
         if (continuationPage.error || !continuationPage.payload) break
         collectPlaylistVideos(continuationPage.payload, entriesMap)
         nextToken = findContinuationToken(continuationPage.payload)
@@ -431,7 +466,7 @@ export async function fetchPlaylistEntries(url, cursor = '') {
       return {
         error: null,
         entries,
-        next_cursor: null,
+        next_cursor: nextToken ? encodePlaylistCursor(nextToken) : null,
       }
     }
 
@@ -445,7 +480,11 @@ export async function fetchPlaylistEntries(url, cursor = '') {
     while (nextToken && !seenTokens.has(nextToken) && entriesMap.size < MAX_TRACKS && pages < MAX_PAGES) {
       seenTokens.add(nextToken)
       pages += 1
-      const continuationPage = await fetchYoutubePlaylistContinuationPage(apiKey, bootstrap.context, nextToken)
+      const continuationPage = await fetchYoutubePlaylistContinuationPage(apiKey, bootstrap.context, nextToken, {
+        clientName: bootstrap.clientName,
+        clientVersion: bootstrap.clientVersion,
+        visitorData: bootstrap.visitorData,
+      })
       if (continuationPage.error || !continuationPage.payload) {
         return { error: continuationPage.error ?? 'Не удалось получить следующую страницу плейлиста', entries: [], next_cursor: null }
       }
@@ -455,7 +494,7 @@ export async function fetchPlaylistEntries(url, cursor = '') {
     return {
       error: null,
       entries: Array.from(entriesMap.values()),
-      next_cursor: null,
+      next_cursor: nextToken ? encodePlaylistCursor(nextToken) : null,
     }
   } catch {
     return { error: 'Не удалось прочитать YouTube плейлист', entries: [], next_cursor: null }
