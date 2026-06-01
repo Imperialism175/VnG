@@ -87,7 +87,7 @@ export function RoomHud({
               </span>
               <div className="vng-dos-hud__pair min-w-0">
                 <span className="vng-dos-hud__label">Уровень</span>
-                <span className="vng-dos-hud__value truncate max-w-[14rem]">{levelLabel}</span>
+                <span className="vng-dos-hud__value break-words">{levelLabel}</span>
               </div>
             </>
           ) : null}

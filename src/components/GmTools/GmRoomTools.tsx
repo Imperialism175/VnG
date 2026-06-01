@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FlashlightOff, Flashlight, Music, Vote, MessageSquareQuote } from 'lucide-react'
 import type { Player, RoomMusic, RoomTheme } from '@/types'
 import { apiGetPlaylistEntries, type PlaylistEntry } from '@/lib/api'
@@ -54,6 +54,7 @@ export function GmRoomTools({
   showLevelToPlayers,
   onSetShowLevelToPlayers,
 }: GmRoomToolsProps) {
+  const PLAYLIST_DRAFT_STORAGE_KEY = 'vng_gm_playlist_draft_v1'
   const roster = players.filter((p) => !p.is_gm)
   const [themeTarget, setThemeTarget] = useState<'all' | string>('all')
   const [musicUrl, setMusicUrl] = useState(music.url ?? '')
@@ -63,11 +64,50 @@ export function GmRoomTools({
   const [msgTitle, setMsgTitle] = useState('')
   const [msgText, setMsgText] = useState('')
   const [msgTarget, setMsgTarget] = useState<'all' | string>('all')
-  const [playlistUrl, setPlaylistUrl] = useState('')
-  const [playlistEntries, setPlaylistEntries] = useState<PlaylistEntry[]>([])
+  const [playlistUrl, setPlaylistUrl] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)
+      if (!raw) return ''
+      const parsed = JSON.parse(raw) as { playlistUrl?: string }
+      return String(parsed.playlistUrl ?? '')
+    } catch {
+      return ''
+    }
+  })
+  const [playlistEntries, setPlaylistEntries] = useState<PlaylistEntry[]>(() => {
+    try {
+      const raw = window.localStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw) as { playlistEntries?: PlaylistEntry[] }
+      return Array.isArray(parsed.playlistEntries) ? parsed.playlistEntries : []
+    } catch {
+      return []
+    }
+  })
   const [playlistLoading, setPlaylistLoading] = useState(false)
   const [playlistError, setPlaylistError] = useState<string | null>(null)
-  const [selectedPlaylistTrackUrl, setSelectedPlaylistTrackUrl] = useState('')
+  const [selectedPlaylistTrackUrl, setSelectedPlaylistTrackUrl] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)
+      if (!raw) return ''
+      const parsed = JSON.parse(raw) as { selectedPlaylistTrackUrl?: string }
+      return String(parsed.selectedPlaylistTrackUrl ?? '')
+    } catch {
+      return ''
+    }
+  })
+  const selectedLevel = LEVEL_PRESETS.find((level) => level.id === levelId) ?? null
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        PLAYLIST_DRAFT_STORAGE_KEY,
+        JSON.stringify({ playlistUrl, selectedPlaylistTrackUrl, playlistEntries })
+      )
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [playlistUrl, selectedPlaylistTrackUrl, playlistEntries])
 
   const videoPreview = parseYoutubeVideoId(musicUrl)
   const isDirectAudio = /\.(mp3|ogg|opus|wav|m4a|aac|flac|webm)(\?|$)/i.test(musicUrl.trim())
@@ -175,6 +215,15 @@ export function GmRoomTools({
         <p className="text-[11px] text-vng-muted">
           Выбор уровня больше не меняет цвета автоматически. Цвета настраиваются вручную в блоке выше.
         </p>
+        {selectedLevel && (
+          <div className="border border-vng-border bg-vng-bg/50 p-2">
+            <p className="text-xs text-vng-muted">Выбранный уровень:</p>
+            <p className="text-xs leading-relaxed break-words">
+              {selectedLevel.title || '—'}
+              {selectedLevel.altTitle ? ` (${selectedLevel.altTitle})` : ''}
+            </p>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-2 pt-1 border-t border-vng-border">
           <span className="text-xs text-vng-muted">Показывать уровень игрокам</span>
           <Button
