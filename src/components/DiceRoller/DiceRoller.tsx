@@ -172,9 +172,7 @@ export function DiceRoller({
   const rollLocked = disabled || !canRoll || cooldownSec > 0
   const blockHint = !canRoll && !isGm
     ? 'ГМ должен разрешить вам бросок (кнопка с кубиком в списке игроков слева).'
-    : cooldownSec > 0
-      ? `Перезарядка: ${cooldownSec} сек.`
-      : null
+    : null
 
   function handleRoll() {
     if (rollLocked || rolling) return
