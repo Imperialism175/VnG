@@ -173,7 +173,7 @@ export function GmRoomTools({
           </select>
         </div>
         <p className="text-[11px] text-vng-muted">
-          При выборе уровня цветовая палитра комнаты подстраивается автоматически.
+          Выбор уровня больше не меняет цвета автоматически. Цвета настраиваются вручную в блоке выше.
         </p>
         <div className="flex items-center justify-between gap-2 pt-1 border-t border-vng-border">
           <span className="text-xs text-vng-muted">Показывать уровень игрокам</span>

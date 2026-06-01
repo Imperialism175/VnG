@@ -22,6 +22,7 @@ import { ScreenMessageOverlay } from '@/components/ScreenMessage/ScreenMessageOv
 import { Button } from '@/components/ui/Button'
 import { RoomHud } from '@/components/RoomHud/RoomHud'
 import { ThemeColorEditor } from '@/components/RoomTheme/ThemeColorEditor'
+import { FloatingCalculator } from '@/components/Calculator/FloatingCalculator'
 import { getRoomSessionStartMs } from '@/lib/sessionTime'
 import { getLevelPreset } from '@/lib/levels'
 import { getStatEffectForCharacterSheet, resolveCharacterPresetId } from '@/lib/characterSheets'
@@ -112,6 +113,7 @@ function GameRoomContent() {
   const [copied, setCopied] = useState(false)
   const [dismissedScreenId, setDismissedScreenId] = useState<string | null>(null)
   const [themePanelOpen, setThemePanelOpen] = useState(false)
+  const [calculatorOpen, setCalculatorOpen] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileUiScale, setMobileUiScale] = useState<number>(() => {
     try {
@@ -440,6 +442,8 @@ function GameRoomContent() {
         themeOpen={themePanelOpen}
         showThemeToggle={session.isGm || allowPlayerThemeEditing}
         onToggleTheme={() => setThemePanelOpen((v) => !v)}
+        calculatorOpen={calculatorOpen}
+        onToggleCalculator={() => setCalculatorOpen((v) => !v)}
       />
 
       {themePanelOpen && (
@@ -614,6 +618,8 @@ function GameRoomContent() {
           onClose={() => setShowGmPanel(false)}
         />
       )}
+
+      <FloatingCalculator open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
 
       {visibleScreenMessage && (
         <ScreenMessageOverlay

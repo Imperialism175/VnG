@@ -15,6 +15,8 @@ interface RoomHudProps {
   themeOpen?: boolean
   showThemeToggle?: boolean
   onToggleTheme?: () => void
+  calculatorOpen?: boolean
+  onToggleCalculator?: () => void
 }
 
 export function RoomHud({
@@ -31,6 +33,8 @@ export function RoomHud({
   themeOpen,
   showThemeToggle = true,
   onToggleTheme,
+  calculatorOpen,
+  onToggleCalculator,
 }: RoomHudProps) {
   return (
     <header className="vng-retro-header vng-dos-hud shrink-0 z-40" aria-label="Панель сессии">
@@ -96,6 +100,11 @@ export function RoomHud({
                 aria-expanded={themeOpen}
               >
                 {themeOpen ? 'Скрыть цвета' : 'Цвета'}
+              </button>
+            )}
+            {onToggleCalculator && (
+              <button type="button" onClick={onToggleCalculator} className="vng-tui-btn vng-tui-btn--ghost text-xs">
+                {calculatorOpen ? 'Скрыть кальк' : 'Калькулятор'}
               </button>
             )}
             {isGm && (

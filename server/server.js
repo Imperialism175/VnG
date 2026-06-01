@@ -10,7 +10,7 @@ import {
   formatRollChatMessage,
   extractAbilitySlotModesFromText,
 } from './dice.js'
-import { getLevelPalette } from './levels.js'
+import { hasLevelPreset } from './levels.js'
 import {
   DEFAULT_THEME,
   createRoomExtras,
@@ -1001,17 +1001,11 @@ wss.on('connection', (ws, req) => {
     }
 
     if (msg.type === 'SET_LEVEL_PRESET' && player.is_gm) {
-      const nextLevelId = typeof msg.level_id === 'string' && msg.level_id.trim() ? msg.level_id.trim() : null
+      const requestedLevelId = typeof msg.level_id === 'string' && msg.level_id.trim() ? msg.level_id.trim() : null
+      const nextLevelId = requestedLevelId && hasLevelPreset(requestedLevelId) ? requestedLevelId : null
       const variant = msg.variant === 'alt' ? 'alt' : 'main'
       room.levelId = nextLevelId
       room.levelVariant = variant
-      if (nextLevelId) {
-        const palette = getLevelPalette(nextLevelId, variant)
-        if (palette) {
-          room.theme = sanitizeTheme(palette)
-          room.playerThemes = {}
-        }
-      }
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
