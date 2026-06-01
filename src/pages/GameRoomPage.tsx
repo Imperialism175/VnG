@@ -267,7 +267,9 @@ function GameRoomContent() {
         const effect = Number.isFinite(statRaw)
           ? getStatEffectForCharacterSheet(myCharacter?.sheet_preset_id ?? null, myCharacter?.class_status ?? '', statRaw)
           : null
-        return [s.name, typeof effect === 'number' && Number.isFinite(effect) ? effect : 0]
+        const numericEffect = typeof effect === 'number' && Number.isFinite(effect) ? effect : 0
+        const finalStat = Number.isFinite(statRaw) ? statRaw + numericEffect : numericEffect
+        return [s.name, finalStat]
       })
     ),
     inspirationPoints: myCharacter?.counters.find((c) => /вдох|inspir/i.test(c.name))?.current ?? 0,
@@ -287,7 +289,9 @@ function GameRoomContent() {
                 const effect = Number.isFinite(statRaw)
                   ? getStatEffectForCharacterSheet(c.sheet_preset_id ?? null, c.class_status ?? '', statRaw)
                   : null
-                return [s.name, typeof effect === 'number' && Number.isFinite(effect) ? effect : 0]
+                const numericEffect = typeof effect === 'number' && Number.isFinite(effect) ? effect : 0
+                const finalStat = Number.isFinite(statRaw) ? statRaw + numericEffect : numericEffect
+                return [s.name, finalStat]
               })
             ),
             wandererMode: resolveCharacterPresetId(c.sheet_preset_id ?? null, c.class_status ?? '') === 'wanderer',
