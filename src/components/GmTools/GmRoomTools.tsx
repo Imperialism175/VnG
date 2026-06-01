@@ -85,6 +85,7 @@ export function GmRoomTools({
     }
   })
   const [playlistLoading, setPlaylistLoading] = useState(false)
+  const [playlistLoadingMore, setPlaylistLoadingMore] = useState(false)
   const [playlistError, setPlaylistError] = useState<string | null>(null)
   const [selectedPlaylistTrackUrl, setSelectedPlaylistTrackUrl] = useState(() => {
     try {
@@ -126,6 +127,17 @@ export function GmRoomTools({
       return true
     }
   })
+  const [playlistNextCursor, setPlaylistNextCursor] = useState<string | null>(() => {
+    try {
+      const raw = window.localStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as { playlistNextCursor?: string | null }
+      const value = String(parsed.playlistNextCursor ?? '').trim()
+      return value || null
+    } catch {
+      return null
+    }
+  })
   const selectedLevel = LEVEL_PRESETS.find((level) => level.id === levelId) ?? null
 
   const filteredPlaylistEntries = useMemo(() => {
@@ -149,12 +161,13 @@ export function GmRoomTools({
           playlistSearch,
           playlistShuffle,
           playlistLoop,
+          playlistNextCursor,
         })
       )
     } catch {
       /* ignore storage errors */
     }
-  }, [playlistUrl, selectedPlaylistTrackUrl, playlistEntries, playlistSearch, playlistShuffle, playlistLoop])
+  }, [playlistUrl, selectedPlaylistTrackUrl, playlistEntries, playlistSearch, playlistShuffle, playlistLoop, playlistNextCursor])
 
   const videoPreview = parseYoutubeVideoId(musicUrl)
   const isDirectAudio = /\.(mp3|ogg|opus|wav|m4a|aac|flac|webm)(\?|$)/i.test(musicUrl.trim())
@@ -167,6 +180,7 @@ export function GmRoomTools({
     try {
       const result = await apiGetPlaylistEntries(url)
       setPlaylistEntries(result.entries)
+      setPlaylistNextCursor(result.next_cursor ?? null)
       const firstUrl = result.entries[0]?.url ?? ''
       setSelectedPlaylistTrackUrl(firstUrl)
       if (firstUrl) setMusicUrl(firstUrl)
@@ -176,9 +190,37 @@ export function GmRoomTools({
     } catch (err) {
       setPlaylistEntries([])
       setSelectedPlaylistTrackUrl('')
+      setPlaylistNextCursor(null)
       setPlaylistError(err instanceof Error ? err.message : 'Не удалось загрузить плейлист')
     } finally {
       setPlaylistLoading(false)
+    }
+  }
+
+  async function handleLoadMorePlaylist() {
+    const url = playlistUrl.trim()
+    if (!url || !playlistNextCursor || playlistLoading || playlistLoadingMore) return
+    setPlaylistLoadingMore(true)
+    try {
+      const result = await apiGetPlaylistEntries(url, playlistNextCursor)
+      setPlaylistEntries((prev) => {
+        if (!result.entries.length) return prev
+        const next = [...prev]
+        const seen = new Set(prev.map((entry) => `${entry.id}::${entry.url}`))
+        for (const entry of result.entries) {
+          const key = `${entry.id}::${entry.url}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          next.push(entry)
+        }
+        return next
+      })
+      setPlaylistNextCursor(result.next_cursor ?? null)
+    } catch (err) {
+      setPlaylistError(err instanceof Error ? err.message : 'Не удалось догрузить плейлист')
+      setPlaylistNextCursor(null)
+    } finally {
+      setPlaylistLoadingMore(false)
     }
   }
 
@@ -355,18 +397,18 @@ export function GmRoomTools({
               size="sm"
               variant={playlistShuffle ? 'secondary' : 'ghost'}
               onClick={() => setPlaylistShuffle((v) => !v)}
-              disabled={playlistLoading || playlistEntries.length === 0}
+              disabled={playlistLoading || playlistLoadingMore || playlistEntries.length === 0}
             >
-              🔀 Перемешать: {playlistShuffle ? 'ВКЛ' : 'ВЫКЛ'}
+              Перемешать: {playlistShuffle ? 'ВКЛ' : 'ВЫКЛ'}
             </Button>
             <Button
               type="button"
               size="sm"
               variant={playlistLoop ? 'secondary' : 'ghost'}
               onClick={() => setPlaylistLoop((v) => !v)}
-              disabled={playlistLoading || playlistEntries.length === 0}
+              disabled={playlistLoading || playlistLoadingMore || playlistEntries.length === 0}
             >
-              🔁 Цикл: {playlistLoop ? 'ВКЛ' : 'ВЫКЛ'}
+              Цикл: {playlistLoop ? 'ВКЛ' : 'ВЫКЛ'}
             </Button>
             <Button
               type="button"
@@ -375,9 +417,10 @@ export function GmRoomTools({
               onClick={() => {
                 setPlaylistEntries([])
                 setSelectedPlaylistTrackUrl('')
+                setPlaylistNextCursor(null)
                 setPlaylistError(null)
               }}
-              disabled={playlistLoading || playlistEntries.length === 0}
+              disabled={playlistLoading || playlistLoadingMore || playlistEntries.length === 0}
             >
               Очистить список
             </Button>
@@ -409,7 +452,14 @@ export function GmRoomTools({
                   ))}
                 </select>
               </label>
-              <div className="max-h-72 overflow-y-auto border border-vng-border bg-vng-bg/50 p-2 space-y-2">
+              <div
+                className="max-h-72 overflow-y-auto border border-vng-border bg-vng-bg/50 p-2 space-y-2"
+                onScroll={(e) => {
+                  const el = e.currentTarget
+                  const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 64
+                  if (nearBottom) void handleLoadMorePlaylist()
+                }}
+              >
                 {filteredPlaylistEntries.map((entry) => {
                   const selected = selectedPlaylistTrackUrl === entry.url
                   return (
@@ -443,6 +493,15 @@ export function GmRoomTools({
                     </button>
                   )
                 })}
+                {playlistLoadingMore && (
+                  <p className="text-[11px] text-vng-muted px-1">Подгружаю ещё треки...</p>
+                )}
+                {!playlistLoadingMore && playlistNextCursor && (
+                  <p className="text-[11px] text-vng-muted px-1">Прокрутите вниз, чтобы подгрузить ещё</p>
+                )}
+                {!playlistLoadingMore && !playlistNextCursor && playlistEntries.length > 0 && (
+                  <p className="text-[11px] text-vng-muted px-1">Загружены все доступные треки</p>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -470,7 +529,7 @@ export function GmRoomTools({
                   }}
                   disabled={filteredPlaylistEntries.length === 0}
                 >
-                  ⏭ Следующий ({playlistShuffle ? 'случайно' : playlistLoop ? 'с циклом' : 'по порядку'})
+                  Следующий ({playlistShuffle ? 'случайно' : playlistLoop ? 'с циклом' : 'по порядку'})
                 </Button>
               </div>
             </>

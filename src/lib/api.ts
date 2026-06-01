@@ -21,6 +21,11 @@ export interface PlaylistEntry {
   thumbnail_url?: string
 }
 
+export interface PlaylistEntriesResponse {
+  entries: PlaylistEntry[]
+  next_cursor: string | null
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${getApiBase()}${path}`, {
     ...init,
@@ -57,6 +62,8 @@ export async function apiGetRoomById(roomId: string) {
   }>(`/api/rooms/${encodeURIComponent(roomId)}`)
 }
 
-export async function apiGetPlaylistEntries(url: string) {
-  return apiFetch<{ entries: PlaylistEntry[] }>(`/api/music/playlist?url=${encodeURIComponent(url)}`)
+export async function apiGetPlaylistEntries(url: string, cursor?: string) {
+  const qs = new URLSearchParams({ url })
+  if (cursor) qs.set('cursor', cursor)
+  return apiFetch<PlaylistEntriesResponse>(`/api/music/playlist?${qs.toString()}`)
 }

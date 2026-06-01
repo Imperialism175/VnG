@@ -509,16 +509,17 @@ const httpServer = createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/music/playlist') {
       const playlistUrl = String(url.searchParams.get('url') ?? '').trim()
+      const cursor = String(url.searchParams.get('cursor') ?? '').trim()
       if (!playlistUrl) {
         json(400, { error: 'Нужна ссылка на плейлист' })
         return
       }
-      const result = await fetchPlaylistEntries(playlistUrl)
+      const result = await fetchPlaylistEntries(playlistUrl, cursor)
       if (result.error) {
-        json(400, { error: result.error, entries: [] })
+        json(400, { error: result.error, entries: [], next_cursor: null })
         return
       }
-      json(200, { entries: result.entries })
+      json(200, { entries: result.entries, next_cursor: result.next_cursor ?? null })
       return
     }
 

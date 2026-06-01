@@ -145,13 +145,31 @@ function findContinuationToken(node) {
   return null
 }
 
-async function fetchYoutubePlaylistAllEntries(playlistId) {
+function encodePlaylistCursor(value) {
+  try {
+    return Buffer.from(String(value ?? ''), 'utf8').toString('base64url')
+  } catch {
+    return ''
+  }
+}
+
+function decodePlaylistCursor(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  try {
+    return Buffer.from(raw, 'base64url').toString('utf8').trim()
+  } catch {
+    return ''
+  }
+}
+
+async function fetchYoutubePlaylistBootstrap(playlistId) {
   const pageUrl = `https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}&hl=ru`
   const pageRes = await fetch(pageUrl, {
     headers: { 'User-Agent': 'Mozilla/5.0 (VnG playlist loader)' },
   })
   if (!pageRes.ok) {
-    return { error: `Не удалось открыть страницу плейлиста (HTTP ${pageRes.status})`, entries: [] }
+    return { error: `Не удалось открыть страницу плейлиста (HTTP ${pageRes.status})`, initialData: null, apiKey: '', context: null }
   }
   const html = await pageRes.text()
   const initialData =
@@ -170,44 +188,24 @@ async function fetchYoutubePlaylistAllEntries(playlistId) {
         gl: 'US',
       },
     }
+  return { error: null, initialData, apiKey, context }
+}
 
-  const entriesMap = new Map()
-  if (initialData) collectPlaylistVideos(initialData, entriesMap)
-
-  let continuation = initialData ? findContinuationToken(initialData) : null
-  const seenTokens = new Set()
-  let pages = 0
-  const MAX_PAGES = 300
-  const MAX_TRACKS = 10000
-
-  while (continuation && !seenTokens.has(continuation) && pages < MAX_PAGES && entriesMap.size < MAX_TRACKS) {
-    seenTokens.add(continuation)
-    pages += 1
-    if (!apiKey) break
-    try {
-      const contRes = await fetch(`https://www.youtube.com/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (VnG playlist loader)',
-        },
-        body: JSON.stringify({
-          context,
-          continuation,
-        }),
-      })
-      if (!contRes.ok) break
-      const payload = await contRes.json()
-      collectPlaylistVideos(payload, entriesMap)
-      continuation = findContinuationToken(payload)
-    } catch {
-      break
-    }
-  }
-
-  const entries = Array.from(entriesMap.values())
-  if (!entries.length) return { error: 'Плейлист пустой или закрыт', entries: [] }
-  return { error: null, entries }
+async function fetchYoutubePlaylistContinuationPage(apiKey, context, continuationToken) {
+  const contRes = await fetch(`https://www.youtube.com/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (VnG playlist loader)',
+    },
+    body: JSON.stringify({
+      context,
+      continuation: continuationToken,
+    }),
+  })
+  if (!contRes.ok) return { error: `Не удалось загрузить следующую страницу (HTTP ${contRes.status})`, payload: null }
+  const payload = await contRes.json()
+  return { error: null, payload }
 }
 
 class RoomMusicHub {
@@ -378,37 +376,68 @@ export async function fetchMusicTitle(url) {
   }
 }
 
-export async function fetchPlaylistEntries(url) {
+export async function fetchPlaylistEntries(url, cursor = '') {
   const playlistId = parseYoutubePlaylistId(url)
-  if (!playlistId) return { error: 'Нужна корректная ссылка на YouTube playlist', entries: [] }
+  if (!playlistId) return { error: 'Нужна корректная ссылка на YouTube playlist', entries: [], next_cursor: null }
+  const continuationToken = decodePlaylistCursor(cursor)
   try {
-    const fullResult = await fetchYoutubePlaylistAllEntries(playlistId)
-    if (!fullResult.error && fullResult.entries.length) return fullResult
+    const bootstrap = await fetchYoutubePlaylistBootstrap(playlistId)
+    if (bootstrap.error) return { error: bootstrap.error, entries: [], next_cursor: null }
 
-    // Fallback to RSS feed when full scrape fails.
-    const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`
-    const res = await fetch(feedUrl, { headers: { 'User-Agent': 'VnG/1.0' } })
-    if (!res.ok) return { error: fullResult.error ?? `Не удалось загрузить плейлист (HTTP ${res.status})`, entries: [] }
-    const xml = await res.text()
-    const entryBlocks = xml.match(/<entry>[\s\S]*?<\/entry>/g) ?? []
-    const entries = entryBlocks.map((block, idx) => {
-      const idMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)
-      const titleMatch = block.match(/<title>([\s\S]*?)<\/title>/)
-      const thumbMatch = block.match(/<media:thumbnail[^>]+url="([^"]+)"/)
-      const videoId = String(idMatch?.[1] ?? '').trim()
-      if (!videoId) return null
-      const title = htmlEntityDecode(String(titleMatch?.[1] ?? `Трек ${idx + 1}`)).trim().slice(0, 200)
-      return {
-        id: videoId,
-        title: title || `Трек ${idx + 1}`,
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        thumbnail_url: String(thumbMatch?.[1] ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`).trim(),
+    if (!continuationToken) {
+      const entriesMap = new Map()
+      if (bootstrap.initialData) collectPlaylistVideos(bootstrap.initialData, entriesMap)
+      const entries = Array.from(entriesMap.values())
+      const nextToken = bootstrap.initialData ? findContinuationToken(bootstrap.initialData) : null
+      if (!entries.length) {
+        // Fallback to RSS feed when page parsing fails.
+        const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`
+        const res = await fetch(feedUrl, { headers: { 'User-Agent': 'VnG/1.0' } })
+        if (!res.ok) return { error: `Не удалось загрузить плейлист (HTTP ${res.status})`, entries: [], next_cursor: null }
+        const xml = await res.text()
+        const entryBlocks = xml.match(/<entry>[\s\S]*?<\/entry>/g) ?? []
+        const rssEntries = entryBlocks.map((block, idx) => {
+          const idMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)
+          const titleMatch = block.match(/<title>([\s\S]*?)<\/title>/)
+          const thumbMatch = block.match(/<media:thumbnail[^>]+url="([^"]+)"/)
+          const videoId = String(idMatch?.[1] ?? '').trim()
+          if (!videoId) return null
+          const title = htmlEntityDecode(String(titleMatch?.[1] ?? `Трек ${idx + 1}`)).trim().slice(0, 200)
+          return {
+            id: videoId,
+            title: title || `Трек ${idx + 1}`,
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            thumbnail_url: String(thumbMatch?.[1] ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`).trim(),
+          }
+        }).filter(Boolean)
+        if (!rssEntries.length) return { error: 'Плейлист пустой или закрыт', entries: [], next_cursor: null }
+        return { error: null, entries: rssEntries, next_cursor: null }
       }
-    }).filter(Boolean)
-    if (!entries.length) return { error: fullResult.error ?? 'Плейлист пустой или закрыт', entries: [] }
-    return { error: null, entries }
+      return {
+        error: null,
+        entries,
+        next_cursor: nextToken ? encodePlaylistCursor(nextToken) : null,
+      }
+    }
+
+    const apiKey = String(bootstrap.apiKey ?? '').trim()
+    if (!apiKey) return { error: 'Не удалось продолжить загрузку плейлиста (нет API key)', entries: [], next_cursor: null }
+    const continuationPage = await fetchYoutubePlaylistContinuationPage(apiKey, bootstrap.context, continuationToken)
+    if (continuationPage.error || !continuationPage.payload) {
+      return { error: continuationPage.error ?? 'Не удалось получить следующую страницу плейлиста', entries: [], next_cursor: null }
+    }
+
+    const entriesMap = new Map()
+    collectPlaylistVideos(continuationPage.payload, entriesMap)
+    const entries = Array.from(entriesMap.values())
+    const nextToken = findContinuationToken(continuationPage.payload)
+    return {
+      error: null,
+      entries,
+      next_cursor: nextToken ? encodePlaylistCursor(nextToken) : null,
+    }
   } catch {
-    return { error: 'Не удалось прочитать YouTube плейлист', entries: [] }
+    return { error: 'Не удалось прочитать YouTube плейлист', entries: [], next_cursor: null }
   }
 }
 
