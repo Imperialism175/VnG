@@ -270,6 +270,41 @@ export function GmRoomTools({
                   ))}
                 </select>
               </label>
+              <div className="max-h-72 overflow-y-auto border border-vng-border bg-vng-bg/50 p-2 space-y-2">
+                {playlistEntries.map((entry) => {
+                  const selected = selectedPlaylistTrackUrl === entry.url
+                  return (
+                    <button
+                      key={`${entry.id}-card`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPlaylistTrackUrl(entry.url)
+                        setMusicUrl(entry.url)
+                      }}
+                      className={`w-full text-left p-2 border flex items-center gap-2 ${
+                        selected ? 'border-vng-blue bg-vng-blue/10' : 'border-vng-border hover:bg-vng-elevated'
+                      }`}
+                    >
+                      {entry.thumbnail_url ? (
+                        <img
+                          src={entry.thumbnail_url}
+                          alt={entry.title}
+                          className="w-20 h-12 object-cover border border-vng-border shrink-0"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-20 h-12 border border-vng-border shrink-0 flex items-center justify-center text-[10px] text-vng-muted">
+                          no preview
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold truncate">{entry.title}</p>
+                        <p className="text-[10px] text-vng-muted truncate">{entry.id}</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
               <Button
                 type="button"
                 size="sm"

@@ -18,6 +18,7 @@ export interface PlaylistEntry {
   id: string
   title: string
   url: string
+  thumbnail_url?: string
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

@@ -226,6 +226,7 @@ export async function fetchPlaylistEntries(url) {
       .map((block, idx) => {
         const idMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)
         const titleMatch = block.match(/<title>([\s\S]*?)<\/title>/)
+        const thumbMatch = block.match(/<media:thumbnail[^>]+url="([^"]+)"/)
         const videoId = String(idMatch?.[1] ?? '').trim()
         if (!videoId) return null
         const titleRaw = String(titleMatch?.[1] ?? `Трек ${idx + 1}`)
@@ -241,6 +242,7 @@ export async function fetchPlaylistEntries(url) {
           id: videoId,
           title: title || `Трек ${idx + 1}`,
           url: `https://www.youtube.com/watch?v=${videoId}`,
+          thumbnail_url: String(thumbMatch?.[1] ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`).trim(),
         }
       })
       .filter(Boolean)
