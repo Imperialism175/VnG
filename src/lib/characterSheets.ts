@@ -62,18 +62,12 @@ export const SPECIAL_FIELD_NAMES = [
   'Способности',
   'Инвентарь',
   'Описание',
-  'Бэкграунд',
-  'Заметки ГМ',
-  'Правило листика',
 ] as const
 
 const SPECIAL_FIELD_SLOTS: Array<{ fallback: string; aliases: string[] }> = [
   { fallback: 'Способности', aliases: ['способности'] },
   { fallback: 'Инвентарь', aliases: ['инвентарь', 'мой мешочек', 'мешочек', 'кпк'] },
-  { fallback: 'Описание', aliases: ['описание'] },
-  { fallback: 'Бэкграунд', aliases: ['бэкграунд', 'предыстория', 'кузница вдохновения'] },
-  { fallback: 'Заметки ГМ', aliases: ['заметки гм'] },
-  { fallback: 'Правило листика', aliases: ['правило листика'] },
+  { fallback: 'Описание', aliases: ['описание', 'бэкграунд', 'предыстория', 'кузница вдохновения'] },
 ]
 
 export function createDefaultStats(): StatField[] {
