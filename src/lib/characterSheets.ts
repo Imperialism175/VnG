@@ -524,7 +524,7 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
         skillPoints: 23,
         extraStats: [stat('УРОВЕНЬ', '20')],
         textValues: {
-          Инвентарь: '✚',
+          Инвентарь: 'Крестик',
           Способности:
             'Уровень 7-1:\n\n' +
             'Уровень 7-2:\n\n' +
