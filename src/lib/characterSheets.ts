@@ -67,6 +67,15 @@ export const SPECIAL_FIELD_NAMES = [
   'Правило листика',
 ] as const
 
+const SPECIAL_FIELD_SLOTS: Array<{ fallback: string; aliases: string[] }> = [
+  { fallback: 'Способности', aliases: ['способности'] },
+  { fallback: 'Инвентарь', aliases: ['инвентарь', 'мой мешочек', 'мешочек', 'кпк'] },
+  { fallback: 'Описание', aliases: ['описание'] },
+  { fallback: 'Бэкграунд', aliases: ['бэкграунд', 'предыстория', 'кузница вдохновения'] },
+  { fallback: 'Заметки ГМ', aliases: ['заметки гм'] },
+  { fallback: 'Правило листика', aliases: ['правило листика'] },
+]
+
 export function createDefaultStats(): StatField[] {
   return DEFAULT_STATS.map((name) => stat(name))
 }
@@ -647,12 +656,13 @@ export function isSkillPointCounter(name: string) {
 
 export function ensureSpecialTextFields(textFields: TextField[] | undefined): TextField[] {
   const existing = Array.isArray(textFields) ? textFields : []
-  const byName = new Map(existing.map((f) => [f.name.trim().toLowerCase(), f]))
+  const byName = new Map(existing.map((f) => [String(f.name ?? '').trim().toLowerCase(), f]))
 
-  return SPECIAL_FIELD_NAMES.map((name) => {
-    const key = name.trim().toLowerCase()
-    const found = byName.get(key)
-    return found ? { ...found, name } : textField(name, '')
+  return SPECIAL_FIELD_SLOTS.map((slot) => {
+    const found = slot.aliases
+      .map((alias) => byName.get(alias))
+      .find((field): field is TextField => Boolean(field))
+    return found ? { ...found } : textField(slot.fallback, '')
   })
 }
 

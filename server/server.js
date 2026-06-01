@@ -64,15 +64,25 @@ const SPECIAL_FIELD_NAMES = [
   'Правило листика',
 ]
 
+const SPECIAL_FIELD_SLOTS = [
+  { fallback: 'Способности', aliases: ['способности'] },
+  { fallback: 'Инвентарь', aliases: ['инвентарь', 'мой мешочек', 'мешочек', 'кпк'] },
+  { fallback: 'Описание', aliases: ['описание'] },
+  { fallback: 'Бэкграунд', aliases: ['бэкграунд', 'предыстория', 'кузница вдохновения'] },
+  { fallback: 'Заметки ГМ', aliases: ['заметки гм'] },
+  { fallback: 'Правило листика', aliases: ['правило листика'] },
+]
+
 function ensureSpecialTextFields(textFields) {
   const existing = Array.isArray(textFields) ? textFields : []
   const byName = new Map(existing.map((f) => [String(f?.name ?? '').trim().toLowerCase(), f]))
-  return SPECIAL_FIELD_NAMES.map((name) => {
-    const key = name.trim().toLowerCase()
-    const found = byName.get(key)
+  return SPECIAL_FIELD_SLOTS.map((slot) => {
+    const found = slot.aliases
+      .map((alias) => byName.get(alias))
+      .find((field) => Boolean(field))
     return found
-      ? { ...found, name }
-      : { id: randomUUID(), name, value: '' }
+      ? { ...found }
+      : { id: randomUUID(), name: slot.fallback, value: '' }
   })
 }
 
