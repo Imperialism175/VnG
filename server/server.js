@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
-import { readFileSync, existsSync, statSync } from 'node:fs'
-import { join, extname } from 'node:path'
+import { readFileSync, existsSync, statSync, writeFileSync, mkdirSync } from 'node:fs'
+import { join, extname, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer } from 'ws'
 import { randomUUID } from 'node:crypto'
@@ -44,6 +44,46 @@ const HOST = process.env.HOST || '0.0.0.0'
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const DIST_DIR = join(__dirname, '..', 'dist')
 const pollAutoCloseTimers = new Map()
+const GLOBAL_LEADERBOARD_FILE = join(__dirname, 'data', 'global-leaderboard.json')
+const LEADERBOARD_EDIT_PASSWORD = 'скибиди дания швеция'
+
+function normalizeLeaderboardPassword(value) {
+  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function cloneHallOfFame(hall) {
+  return {
+    title: String(hall?.title ?? 'ЗАЛ СЛАВЫ'),
+    entries: Array.isArray(hall?.entries)
+      ? hall.entries.map((entry) => ({
+          id: String(entry?.id ?? randomUUID()),
+          name: String(entry?.name ?? ''),
+          ...(entry?.label ? { label: String(entry.label) } : {}),
+        }))
+      : [],
+  }
+}
+
+function loadGlobalHallOfFame() {
+  try {
+    if (!existsSync(GLOBAL_LEADERBOARD_FILE)) {
+      return sanitizeHallOfFame({ title: 'ЗАЛ СЛАВЫ', entries: [] })
+    }
+    const raw = readFileSync(GLOBAL_LEADERBOARD_FILE, 'utf8')
+    const parsed = JSON.parse(raw)
+    return sanitizeHallOfFame(parsed)
+  } catch {
+    return sanitizeHallOfFame({ title: 'ЗАЛ СЛАВЫ', entries: [] })
+  }
+}
+
+function saveGlobalHallOfFame(hall) {
+  const safe = sanitizeHallOfFame(hall)
+  mkdirSync(dirname(GLOBAL_LEADERBOARD_FILE), { recursive: true })
+  writeFileSync(GLOBAL_LEADERBOARD_FILE, JSON.stringify(safe, null, 2), 'utf8')
+}
+
+let globalHallOfFame = loadGlobalHallOfFame()
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -492,6 +532,7 @@ const httpServer = createServer(async (req, res) => {
         activeEncounter: null,
         clients: new Set(),
         ...createRoomExtras(),
+        hallOfFame: cloneHallOfFame(globalHallOfFame),
       }
       initRoomPresence(room)
       rooms.set(id, room)
@@ -1143,8 +1184,17 @@ wss.on('connection', (ws, req) => {
     }
 
     if (msg.type === 'SET_HALL_OF_FAME' && player.is_gm) {
-      room.hallOfFame = sanitizeHallOfFame(msg.hall_of_fame ?? msg)
-      broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
+      const providedPassword = normalizeLeaderboardPassword(msg.leaderboard_password ?? msg.password)
+      if (providedPassword !== normalizeLeaderboardPassword(LEADERBOARD_EDIT_PASSWORD)) {
+        send(ws, { type: 'ERROR', message: 'Неверный пароль редактирования лидерборда' })
+        return
+      }
+      globalHallOfFame = sanitizeHallOfFame(msg.hall_of_fame ?? msg)
+      saveGlobalHallOfFame(globalHallOfFame)
+      for (const targetRoom of rooms.values()) {
+        targetRoom.hallOfFame = cloneHallOfFame(globalHallOfFame)
+        broadcast(targetRoom, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(targetRoom) })
+      }
     }
 
     if (msg.type === 'SET_STAGE_FX' && player.is_gm) {

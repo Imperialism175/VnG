@@ -84,7 +84,11 @@ export type ClientMessage =
   | { type: 'CLEAR_POLL' }
   | { type: 'SHOW_SCREEN_MESSAGE'; title?: string; text: string; target_player_id?: string | null }
   | { type: 'DISMISS_SCREEN_MESSAGE' }
-  | { type: 'SET_HALL_OF_FAME'; hall_of_fame: { title: string; entries: { id: string; name: string; label?: string }[] } }
+  | {
+      type: 'SET_HALL_OF_FAME'
+      hall_of_fame: { title: string; entries: { id: string; name: string; label?: string }[] }
+      leaderboard_password?: string
+    }
   | {
       type: 'SET_STAGE_FX'
       darkness: number

@@ -95,7 +95,7 @@ interface RoomContextValue {
   clearPoll: () => void
   showScreenMessage: (opts: { title?: string; text: string; targetPlayerId?: string | null }) => void
   dismissScreenMessage: () => void
-  setHallOfFame: (hall: HallOfFame) => void
+  setHallOfFame: (hall: HallOfFame, password: string) => void
   setStageFx: (darkness: number) => void
   patchStageFx: (patch: Partial<RoomStageFx>) => void
   setPlayerFlashlight: (playerId: string, enabled: boolean) => void
@@ -609,9 +609,9 @@ export function RoomProvider({
     socketRef.current?.send({ type: 'DISMISS_SCREEN_MESSAGE' })
   }, [])
 
-  const setHallOfFame = useCallback((hall: HallOfFame) => {
+  const setHallOfFame = useCallback((hall: HallOfFame, password: string) => {
     setHallOfFameState(hall)
-    socketRef.current?.send({ type: 'SET_HALL_OF_FAME', hall_of_fame: hall })
+    socketRef.current?.send({ type: 'SET_HALL_OF_FAME', hall_of_fame: hall, leaderboard_password: password })
   }, [])
 
   const sendStageFx = useCallback((next: RoomStageFx) => {

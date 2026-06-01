@@ -15,7 +15,13 @@ interface RetroLeaderboardProps {
   hall: HallOfFame
   isGm: boolean
   fillHeight?: boolean
-  onUpdate?: (hall: HallOfFame) => void
+  onUpdate?: (hall: HallOfFame, password: string) => void
+}
+
+const LEADERBOARD_PASSWORD = 'скибиди дания швеция'
+
+function normalizePassword(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
 function RankBadge({ rank }: { rank: number }) {
@@ -53,6 +59,9 @@ export function RetroLeaderboard({ hall, isGm, fillHeight, onUpdate }: RetroLead
   const [draft, setDraft] = useState(hall)
   const [newName, setNewName] = useState('')
   const [newLabel, setNewLabel] = useState('')
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [unlockedPassword, setUnlockedPassword] = useState<string | null>(null)
 
   useEffect(() => {
     setDraft(hall)
@@ -61,10 +70,12 @@ export function RetroLeaderboard({ hall, isGm, fillHeight, onUpdate }: RetroLead
   const push = useCallback(
     (next: HallOfFame) => {
       setDraft(next)
-      onUpdate?.(next)
+      if (unlockedPassword) onUpdate?.(next, unlockedPassword)
     },
-    [onUpdate]
+    [onUpdate, unlockedPassword]
   )
+
+  const gmUnlocked = isGm && Boolean(unlockedPassword)
 
   function handleTitleBlur() {
     const title = draft.title.trim().slice(0, 80) || DEFAULT_HALL_TITLE
@@ -101,7 +112,16 @@ export function RetroLeaderboard({ hall, isGm, fillHeight, onUpdate }: RetroLead
     push({ ...draft, entries: moveEntry(draft.entries, id, dir) })
   }
 
-  const display = isGm ? draft : hall
+  function unlockEditing() {
+    if (normalizePassword(passwordInput) !== normalizePassword(LEADERBOARD_PASSWORD)) {
+      setPasswordError('Неверный пароль')
+      return
+    }
+    setPasswordError(null)
+    setUnlockedPassword(passwordInput)
+  }
+
+  const display = gmUnlocked ? draft : hall
   const title = display.title || DEFAULT_HALL_TITLE
 
   return (
@@ -113,7 +133,7 @@ export function RetroLeaderboard({ hall, isGm, fillHeight, onUpdate }: RetroLead
         <div className="flex items-start gap-2">
           <Trophy size={22} className="text-vng-retro-gold shrink-0 vng-retro-icon-pulse" />
           <div className="min-w-0 flex-1">
-            {isGm ? (
+            {gmUnlocked ? (
               <input
                 value={draft.title}
                 onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
@@ -126,14 +146,18 @@ export function RetroLeaderboard({ hall, isGm, fillHeight, onUpdate }: RetroLead
               <h2 className="vng-retro-title text-sm sm:text-base tracking-wider">{title}</h2>
             )}
             <p className="text-xs sm:text-sm text-vng-retro-dim font-mono mt-1 vng-retro-blink-sub">
-              ▮ ARCADE HALL · {isGm ? 'GM EDIT' : 'PLAYER VIEW'}
+              ▮ ARCADE HALL · {gmUnlocked ? 'GM EDIT' : isGm ? 'LOCKED' : 'PLAYER VIEW'}
             </p>
           </div>
           {isGm ? <Crown size={16} className="text-vng-retro-gold shrink-0 mt-1" aria-hidden /> : null}
         </div>
-        {isGm ? (
+        {gmUnlocked ? (
           <p className="text-sm text-vng-retro-phosphor/90 mt-2 leading-relaxed">
             Введите имена вручную и расставьте места стрелками. Все игроки видят тот же список.
+          </p>
+        ) : isGm ? (
+          <p className="text-sm text-vng-retro-phosphor/90 mt-2 leading-relaxed">
+            Редактирование заблокировано паролем.
           </p>
         ) : (
           <p className="text-sm text-vng-retro-phosphor/80 mt-2">
@@ -150,7 +174,7 @@ export function RetroLeaderboard({ hall, isGm, fillHeight, onUpdate }: RetroLead
               {isGm ? 'Добавьте первого героя ниже…' : 'Мастер ещё не заполнил таблицу.'}
             </p>
           </div>
-        ) : isGm ? (
+        ) : gmUnlocked ? (
           <ol className="vng-retro-board__list">
             {draft.entries.map((entry, i) => {
               const rank = i + 1
@@ -239,26 +263,42 @@ export function RetroLeaderboard({ hall, isGm, fillHeight, onUpdate }: RetroLead
 
       {isGm ? (
         <footer className="vng-retro-panel__footer shrink-0 space-y-2">
-          <form onSubmit={handleAdd} className="flex flex-col sm:flex-row gap-2">
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Новое имя…"
-              maxLength={48}
-              className="vng-retro-input flex-1"
-            />
-            <input
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Подпись…"
-              maxLength={80}
-              className="vng-retro-input flex-1 sm:max-w-[40%]"
-            />
-            <button type="submit" className="vng-retro-btn shrink-0" disabled={!newName.trim()}>
-              <Plus size={14} />
-              <span>Добавить</span>
-            </button>
-          </form>
+          {!gmUnlocked && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="Пароль для редактирования…"
+                className="vng-retro-input flex-1"
+              />
+              <button type="button" className="vng-retro-btn shrink-0" onClick={unlockEditing}>
+                Разблокировать
+              </button>
+            </div>
+          )}
+          {passwordError && <p className="text-xs text-vng-danger font-mono">{passwordError}</p>}
+          {gmUnlocked && (
+            <form onSubmit={handleAdd} className="flex flex-col sm:flex-row gap-2">
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Новое имя…"
+                maxLength={48}
+                className="vng-retro-input flex-1"
+              />
+              <input
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="Подпись…"
+                maxLength={80}
+                className="vng-retro-input flex-1 sm:max-w-[40%]"
+              />
+              <button type="submit" className="vng-retro-btn shrink-0" disabled={!newName.trim()}>
+                <Plus size={14} />
+                <span>Добавить</span>
+              </button>
+            </form>
+          )}
         </footer>
       ) : (
         <footer className="vng-retro-panel__footer shrink-0 text-center">
