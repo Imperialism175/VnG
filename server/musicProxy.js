@@ -44,6 +44,172 @@ function parseYoutubePlaylistId(url) {
   }
 }
 
+function htmlEntityDecode(text) {
+  return String(text ?? '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+}
+
+function textFromRuns(input) {
+  if (!input || typeof input !== 'object') return ''
+  if (typeof input.simpleText === 'string') return input.simpleText
+  if (Array.isArray(input.runs)) return input.runs.map((r) => String(r?.text ?? '')).join('')
+  return ''
+}
+
+function extractJsonObjectFrom(source, marker) {
+  const idx = source.indexOf(marker)
+  if (idx < 0) return null
+  const braceStart = source.indexOf('{', idx + marker.length)
+  if (braceStart < 0) return null
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = braceStart; i < source.length; i++) {
+    const ch = source[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') {
+      inString = true
+      continue
+    }
+    if (ch === '{') depth++
+    if (ch === '}') depth--
+    if (depth === 0) {
+      try {
+        return JSON.parse(source.slice(braceStart, i + 1))
+      } catch {
+        return null
+      }
+    }
+  }
+  return null
+}
+
+function collectPlaylistVideos(node, map) {
+  if (!node) return
+  if (Array.isArray(node)) {
+    for (const item of node) collectPlaylistVideos(item, map)
+    return
+  }
+  if (typeof node !== 'object') return
+
+  const renderer = node.playlistVideoRenderer
+  if (renderer?.videoId) {
+    const videoId = String(renderer.videoId).trim()
+    if (!videoId) return
+    const title = htmlEntityDecode(textFromRuns(renderer.title)).trim() || `Трек ${map.size + 1}`
+    const thumbs = renderer.thumbnail?.thumbnails
+    const thumb = Array.isArray(thumbs) && thumbs.length ? String(thumbs[thumbs.length - 1]?.url ?? '').trim() : ''
+    if (!map.has(videoId)) {
+      map.set(videoId, {
+        id: videoId,
+        title: title.slice(0, 200),
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        thumbnail_url: thumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      })
+    }
+  }
+
+  for (const value of Object.values(node)) {
+    collectPlaylistVideos(value, map)
+  }
+}
+
+function findContinuationToken(node) {
+  if (!node) return null
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findContinuationToken(item)
+      if (found) return found
+    }
+    return null
+  }
+  if (typeof node !== 'object') return null
+  const token =
+    node?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token ??
+    node?.nextContinuationData?.continuation
+  if (typeof token === 'string' && token.trim()) return token.trim()
+  for (const value of Object.values(node)) {
+    const found = findContinuationToken(value)
+    if (found) return found
+  }
+  return null
+}
+
+async function fetchYoutubePlaylistAllEntries(playlistId) {
+  const pageUrl = `https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}&hl=ru`
+  const pageRes = await fetch(pageUrl, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (VnG playlist loader)' },
+  })
+  if (!pageRes.ok) {
+    return { error: `Не удалось открыть страницу плейлиста (HTTP ${pageRes.status})`, entries: [] }
+  }
+  const html = await pageRes.text()
+  const initialData =
+    extractJsonObjectFrom(html, 'var ytInitialData = ') ??
+    extractJsonObjectFrom(html, 'window["ytInitialData"] = ')
+  const ytcfg = extractJsonObjectFrom(html, 'ytcfg.set(')
+  const apiKeyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)
+  const apiKey = String(apiKeyMatch?.[1] ?? ytcfg?.INNERTUBE_API_KEY ?? '').trim()
+  const context =
+    ytcfg?.INNERTUBE_CONTEXT ??
+    {
+      client: {
+        clientName: 'WEB',
+        clientVersion: '2.20240601.00.00',
+        hl: 'ru',
+        gl: 'US',
+      },
+    }
+
+  const entriesMap = new Map()
+  if (initialData) collectPlaylistVideos(initialData, entriesMap)
+
+  let continuation = initialData ? findContinuationToken(initialData) : null
+  const seenTokens = new Set()
+  let pages = 0
+  const MAX_PAGES = 300
+  const MAX_TRACKS = 10000
+
+  while (continuation && !seenTokens.has(continuation) && pages < MAX_PAGES && entriesMap.size < MAX_TRACKS) {
+    seenTokens.add(continuation)
+    pages += 1
+    if (!apiKey) break
+    try {
+      const contRes = await fetch(`https://www.youtube.com/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (VnG playlist loader)',
+        },
+        body: JSON.stringify({
+          context,
+          continuation,
+        }),
+      })
+      if (!contRes.ok) break
+      const payload = await contRes.json()
+      collectPlaylistVideos(payload, entriesMap)
+      continuation = findContinuationToken(payload)
+    } catch {
+      break
+    }
+  }
+
+  const entries = Array.from(entriesMap.values())
+  if (!entries.length) return { error: 'Плейлист пустой или закрыт', entries: [] }
+  return { error: null, entries }
+}
+
 class RoomMusicHub {
   constructor(roomId) {
     this.roomId = roomId
@@ -216,37 +382,30 @@ export async function fetchPlaylistEntries(url) {
   const playlistId = parseYoutubePlaylistId(url)
   if (!playlistId) return { error: 'Нужна корректная ссылка на YouTube playlist', entries: [] }
   try {
+    const fullResult = await fetchYoutubePlaylistAllEntries(playlistId)
+    if (!fullResult.error && fullResult.entries.length) return fullResult
+
+    // Fallback to RSS feed when full scrape fails.
     const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`
     const res = await fetch(feedUrl, { headers: { 'User-Agent': 'VnG/1.0' } })
-    if (!res.ok) return { error: `Не удалось загрузить плейлист (HTTP ${res.status})`, entries: [] }
+    if (!res.ok) return { error: fullResult.error ?? `Не удалось загрузить плейлист (HTTP ${res.status})`, entries: [] }
     const xml = await res.text()
     const entryBlocks = xml.match(/<entry>[\s\S]*?<\/entry>/g) ?? []
-    const entries = entryBlocks
-      .slice(0, 100)
-      .map((block, idx) => {
-        const idMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)
-        const titleMatch = block.match(/<title>([\s\S]*?)<\/title>/)
-        const thumbMatch = block.match(/<media:thumbnail[^>]+url="([^"]+)"/)
-        const videoId = String(idMatch?.[1] ?? '').trim()
-        if (!videoId) return null
-        const titleRaw = String(titleMatch?.[1] ?? `Трек ${idx + 1}`)
-        const title = titleRaw
-          .replace(/&amp;/g, '&')
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .trim()
-          .slice(0, 200)
-        return {
-          id: videoId,
-          title: title || `Трек ${idx + 1}`,
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          thumbnail_url: String(thumbMatch?.[1] ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`).trim(),
-        }
-      })
-      .filter(Boolean)
-    if (!entries.length) return { error: 'Плейлист пустой или закрыт', entries: [] }
+    const entries = entryBlocks.map((block, idx) => {
+      const idMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)
+      const titleMatch = block.match(/<title>([\s\S]*?)<\/title>/)
+      const thumbMatch = block.match(/<media:thumbnail[^>]+url="([^"]+)"/)
+      const videoId = String(idMatch?.[1] ?? '').trim()
+      if (!videoId) return null
+      const title = htmlEntityDecode(String(titleMatch?.[1] ?? `Трек ${idx + 1}`)).trim().slice(0, 200)
+      return {
+        id: videoId,
+        title: title || `Трек ${idx + 1}`,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        thumbnail_url: String(thumbMatch?.[1] ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`).trim(),
+      }
+    }).filter(Boolean)
+    if (!entries.length) return { error: fullResult.error ?? 'Плейлист пустой или закрыт', entries: [] }
     return { error: null, entries }
   } catch {
     return { error: 'Не удалось прочитать YouTube плейлист', entries: [] }

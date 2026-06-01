@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FlashlightOff, Flashlight, Music, Vote, MessageSquareQuote } from 'lucide-react'
 import type { Player, RoomMusic, RoomTheme } from '@/types'
 import { apiGetPlaylistEntries, type PlaylistEntry } from '@/lib/api'
@@ -96,18 +96,65 @@ export function GmRoomTools({
       return ''
     }
   })
+  const [playlistSearch, setPlaylistSearch] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)
+      if (!raw) return ''
+      const parsed = JSON.parse(raw) as { playlistSearch?: string }
+      return String(parsed.playlistSearch ?? '')
+    } catch {
+      return ''
+    }
+  })
+  const [playlistShuffle, setPlaylistShuffle] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)
+      if (!raw) return false
+      const parsed = JSON.parse(raw) as { playlistShuffle?: boolean }
+      return Boolean(parsed.playlistShuffle)
+    } catch {
+      return false
+    }
+  })
+  const [playlistLoop, setPlaylistLoop] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(PLAYLIST_DRAFT_STORAGE_KEY)
+      if (!raw) return true
+      const parsed = JSON.parse(raw) as { playlistLoop?: boolean }
+      return parsed.playlistLoop !== false
+    } catch {
+      return true
+    }
+  })
   const selectedLevel = LEVEL_PRESETS.find((level) => level.id === levelId) ?? null
+
+  const filteredPlaylistEntries = useMemo(() => {
+    const query = playlistSearch.trim().toLowerCase()
+    if (!query) return playlistEntries
+    return playlistEntries.filter((entry) => {
+      const title = String(entry.title ?? '').toLowerCase()
+      const id = String(entry.id ?? '').toLowerCase()
+      return title.includes(query) || id.includes(query)
+    })
+  }, [playlistEntries, playlistSearch])
 
   useEffect(() => {
     try {
       window.localStorage.setItem(
         PLAYLIST_DRAFT_STORAGE_KEY,
-        JSON.stringify({ playlistUrl, selectedPlaylistTrackUrl, playlistEntries })
+        JSON.stringify({
+          playlistUrl,
+          selectedPlaylistTrackUrl,
+          playlistEntries,
+          playlistSearch,
+          playlistShuffle,
+          playlistLoop,
+        })
       )
     } catch {
       /* ignore storage errors */
     }
-  }, [playlistUrl, selectedPlaylistTrackUrl, playlistEntries])
+  }, [playlistUrl, selectedPlaylistTrackUrl, playlistEntries, playlistSearch, playlistShuffle, playlistLoop])
 
   const videoPreview = parseYoutubeVideoId(musicUrl)
   const isDirectAudio = /\.(mp3|ogg|opus|wav|m4a|aac|flac|webm)(\?|$)/i.test(musicUrl.trim())
@@ -133,6 +180,25 @@ export function GmRoomTools({
     } finally {
       setPlaylistLoading(false)
     }
+  }
+
+  function chooseNextPlaylistTrack() {
+    if (filteredPlaylistEntries.length === 0) return null
+    if (playlistShuffle) {
+      if (filteredPlaylistEntries.length === 1) return filteredPlaylistEntries[0]
+      const currentIndex = filteredPlaylistEntries.findIndex((entry) => entry.url === selectedPlaylistTrackUrl)
+      let nextIndex = Math.floor(Math.random() * filteredPlaylistEntries.length)
+      if (currentIndex >= 0 && nextIndex === currentIndex) {
+        nextIndex = (nextIndex + 1) % filteredPlaylistEntries.length
+      }
+      return filteredPlaylistEntries[nextIndex]
+    }
+    const currentIndex = filteredPlaylistEntries.findIndex((entry) => entry.url === selectedPlaylistTrackUrl)
+    if (currentIndex < 0) return filteredPlaylistEntries[0]
+    const nextIndex = currentIndex + 1
+    if (nextIndex < filteredPlaylistEntries.length) return filteredPlaylistEntries[nextIndex]
+    if (playlistLoop) return filteredPlaylistEntries[0]
+    return null
   }
 
   return (
@@ -287,6 +353,24 @@ export function GmRoomTools({
             <Button
               type="button"
               size="sm"
+              variant={playlistShuffle ? 'secondary' : 'ghost'}
+              onClick={() => setPlaylistShuffle((v) => !v)}
+              disabled={playlistLoading || playlistEntries.length === 0}
+            >
+              🔀 Перемешать: {playlistShuffle ? 'ВКЛ' : 'ВЫКЛ'}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={playlistLoop ? 'secondary' : 'ghost'}
+              onClick={() => setPlaylistLoop((v) => !v)}
+              disabled={playlistLoading || playlistEntries.length === 0}
+            >
+              🔁 Цикл: {playlistLoop ? 'ВКЛ' : 'ВЫКЛ'}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
               variant="ghost"
               onClick={() => {
                 setPlaylistEntries([])
@@ -301,6 +385,12 @@ export function GmRoomTools({
           {playlistError && <p className="text-xs text-vng-danger">{playlistError}</p>}
           {playlistEntries.length > 0 && (
             <>
+              <Input
+                label={`Поиск в плейлисте (${filteredPlaylistEntries.length} из ${playlistEntries.length})`}
+                value={playlistSearch}
+                onChange={(e) => setPlaylistSearch(e.target.value)}
+                placeholder="Искать по названию или ID"
+              />
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-vng-muted uppercase">Трек из плейлиста</span>
                 <select
@@ -312,7 +402,7 @@ export function GmRoomTools({
                     setMusicUrl(next)
                   }}
                 >
-                  {playlistEntries.map((entry) => (
+                  {filteredPlaylistEntries.map((entry) => (
                     <option key={entry.id} value={entry.url}>
                       {entry.title}
                     </option>
@@ -320,7 +410,7 @@ export function GmRoomTools({
                 </select>
               </label>
               <div className="max-h-72 overflow-y-auto border border-vng-border bg-vng-bg/50 p-2 space-y-2">
-                {playlistEntries.map((entry) => {
+                {filteredPlaylistEntries.map((entry) => {
                   const selected = selectedPlaylistTrackUrl === entry.url
                   return (
                     <button
@@ -354,18 +444,35 @@ export function GmRoomTools({
                   )
                 })}
               </div>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => {
-                  if (!selectedPlaylistTrackUrl) return
-                  setMusicUrl(selectedPlaylistTrackUrl)
-                  onSetMusic(selectedPlaylistTrackUrl, true)
-                }}
-                disabled={!selectedPlaylistTrackUrl}
-              >
-                ▶ Включить выбранный трек
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    if (!selectedPlaylistTrackUrl) return
+                    setMusicUrl(selectedPlaylistTrackUrl)
+                    onSetMusic(selectedPlaylistTrackUrl, true)
+                  }}
+                  disabled={!selectedPlaylistTrackUrl}
+                >
+                  ▶ Включить выбранный трек
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    const nextEntry = chooseNextPlaylistTrack()
+                    if (!nextEntry) return
+                    setSelectedPlaylistTrackUrl(nextEntry.url)
+                    setMusicUrl(nextEntry.url)
+                    onSetMusic(nextEntry.url, true)
+                  }}
+                  disabled={filteredPlaylistEntries.length === 0}
+                >
+                  ⏭ Следующий ({playlistShuffle ? 'случайно' : playlistLoop ? 'с циклом' : 'по порядку'})
+                </Button>
+              </div>
             </>
           )}
         </div>
