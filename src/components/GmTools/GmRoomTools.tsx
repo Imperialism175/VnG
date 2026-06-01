@@ -429,7 +429,7 @@ export function GmRoomTools({
           {playlistEntries.length > 0 && (
             <>
               <Input
-                label={`Поиск в плейлисте (${filteredPlaylistEntries.length} из ${playlistEntries.length})`}
+                label={`Поиск в плейлисте (найдено: ${filteredPlaylistEntries.length}, загружено: ${playlistEntries.length}${playlistNextCursor ? '+' : ''})`}
                 value={playlistSearch}
                 onChange={(e) => setPlaylistSearch(e.target.value)}
                 placeholder="Искать по названию или ID"

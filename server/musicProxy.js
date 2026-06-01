@@ -380,6 +380,8 @@ export async function fetchPlaylistEntries(url, cursor = '') {
   const playlistId = parseYoutubePlaylistId(url)
   if (!playlistId) return { error: 'Нужна корректная ссылка на YouTube playlist', entries: [], next_cursor: null }
   const continuationToken = decodePlaylistCursor(cursor)
+  const INITIAL_PREFETCH_TARGET = 5000
+  const PREFETCH_MAX_PAGES = 120
   try {
     const bootstrap = await fetchYoutubePlaylistBootstrap(playlistId)
     if (bootstrap.error) return { error: bootstrap.error, entries: [], next_cursor: null }
@@ -387,8 +389,19 @@ export async function fetchPlaylistEntries(url, cursor = '') {
     if (!continuationToken) {
       const entriesMap = new Map()
       if (bootstrap.initialData) collectPlaylistVideos(bootstrap.initialData, entriesMap)
+      let nextToken = bootstrap.initialData ? findContinuationToken(bootstrap.initialData) : null
+      let pages = 0
+      const apiKey = String(bootstrap.apiKey ?? '').trim()
+
+      while (nextToken && apiKey && entriesMap.size < INITIAL_PREFETCH_TARGET && pages < PREFETCH_MAX_PAGES) {
+        pages += 1
+        const continuationPage = await fetchYoutubePlaylistContinuationPage(apiKey, bootstrap.context, nextToken)
+        if (continuationPage.error || !continuationPage.payload) break
+        collectPlaylistVideos(continuationPage.payload, entriesMap)
+        nextToken = findContinuationToken(continuationPage.payload)
+      }
+
       const entries = Array.from(entriesMap.values())
-      const nextToken = bootstrap.initialData ? findContinuationToken(bootstrap.initialData) : null
       if (!entries.length) {
         // Fallback to RSS feed when page parsing fails.
         const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`
