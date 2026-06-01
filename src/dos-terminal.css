@@ -854,14 +854,56 @@ textarea[class*="border-vng"] {
   fill: var(--vng-dos-fg);
 }
 
-.vng-die-visual__svg.vng-die-visual--crit polygon,
-.vng-die-visual__svg.vng-die-visual--crit rect,
-.vng-die-visual__svg.vng-die-visual--crit circle {
-  animation: vng-dos-blink 0.55s step-end infinite;
+@keyframes vng-die-min-blink {
+  0%,
+  100% {
+    stroke: var(--vng-dos-fg);
+    fill: var(--vng-dos-bg);
+    color: #ff3b3b;
+  }
+  50% {
+    stroke: #ff3b3b;
+    fill: #190000;
+    color: #ff3b3b;
+  }
 }
 
-.vng-die-visual__svg.vng-die-visual--fumble .vng-die-visual__number {
-  opacity: 0.65;
+@keyframes vng-die-max-blink {
+  0%,
+  100% {
+    stroke: var(--vng-dos-fg);
+    fill: var(--vng-dos-bg);
+    color: #ffffff;
+  }
+  50% {
+    stroke: #ffffff;
+    fill: #121212;
+    color: #ffffff;
+  }
+}
+
+.vng-die-visual__svg.vng-die-visual--min polygon,
+.vng-die-visual__svg.vng-die-visual--min rect,
+.vng-die-visual__svg.vng-die-visual--min circle {
+  animation: vng-die-min-blink 0.55s step-end infinite;
+}
+
+.vng-die-visual__svg.vng-die-visual--min .vng-die-visual__number,
+.vng-die-visual__svg.vng-die-visual--min .vng-die-visual__dot {
+  fill: #ff3b3b;
+  animation: vng-die-min-blink 0.55s step-end infinite;
+}
+
+.vng-die-visual__svg.vng-die-visual--max polygon,
+.vng-die-visual__svg.vng-die-visual--max rect,
+.vng-die-visual__svg.vng-die-visual--max circle {
+  animation: vng-die-max-blink 0.55s step-end infinite;
+}
+
+.vng-die-visual__svg.vng-die-visual--max .vng-die-visual__number,
+.vng-die-visual__svg.vng-die-visual--max .vng-die-visual__dot {
+  fill: #ffffff;
+  animation: vng-die-max-blink 0.55s step-end infinite;
 }
 
 .vng-dice-throw-pit__total {

@@ -35,11 +35,14 @@ export function getDieFaceShape(sides: DiceSides): {
     case 4:
       return { tag: 'polygon', attrs: { points: '50,12 88,78 12,78' } }
     case 6:
-      return { tag: 'rect', attrs: { x: 18, y: 18, width: 64, height: 64, rx: 4 } }
+      return { tag: 'polygon', attrs: { points: '50,8 86,28 86,72 50,92 14,72 14,28' } }
     case 8:
       return { tag: 'polygon', attrs: { points: '50,10 90,50 50,90 10,50' } }
     case 10:
-      return { tag: 'polygon', attrs: { points: '50,8 92,38 78,92 22,92 8,38' } }
+      return {
+        tag: 'polygon',
+        attrs: { points: '50,8 74,15 90,33 90,67 74,85 50,92 26,85 10,67 10,33 26,15' },
+      }
     case 12:
       return {
         tag: 'polygon',

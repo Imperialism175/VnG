@@ -39,15 +39,12 @@ export function DiceIcon({ sides, size = 28, className = '' }: DiceIconProps) {
         )
       case 6:
         return (
-          <rect
-            x={s * 0.18}
-            y={s * 0.18}
-            width={s * 0.64}
-            height={s * 0.64}
-            rx={2}
+          <polygon
+            points={`${s * 0.5},${s * 0.08} ${s * 0.86},${s * 0.28} ${s * 0.86},${s * 0.72} ${s * 0.5},${s * 0.92} ${s * 0.14},${s * 0.72} ${s * 0.14},${s * 0.28}`}
             fill="none"
             stroke={stroke}
             strokeWidth={sw}
+            strokeLinejoin="round"
           />
         )
       case 8:
@@ -63,7 +60,7 @@ export function DiceIcon({ sides, size = 28, className = '' }: DiceIconProps) {
       case 10:
         return (
           <polygon
-            points={`${s / 2},${s * 0.08} ${s * 0.92},${s * 0.38} ${s * 0.78},${s * 0.92} ${s * 0.22},${s * 0.92} ${s * 0.08},${s * 0.38}`}
+            points={`${s * 0.5},${s * 0.08} ${s * 0.74},${s * 0.15} ${s * 0.9},${s * 0.33} ${s * 0.9},${s * 0.67} ${s * 0.74},${s * 0.85} ${s * 0.5},${s * 0.92} ${s * 0.26},${s * 0.85} ${s * 0.1},${s * 0.67} ${s * 0.1},${s * 0.33} ${s * 0.26},${s * 0.15}`}
             fill="none"
             stroke={stroke}
             strokeWidth={sw}

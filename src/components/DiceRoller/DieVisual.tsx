@@ -9,8 +9,8 @@ interface DieVisualProps {
 }
 
 export function DieVisual({ value, sides, rolling, className = '' }: DieVisualProps) {
-  const crit = sides === 20 && value === 20
-  const fumble = sides === 20 && value === 1
+  const maxRoll = value === sides
+  const minRoll = value === 1
   const shape = getDieFaceShape(sides)
   const { main, showDot } = formatDieFaceValue(value, sides)
   const fontSize = dieFontSize(value, sides)
@@ -31,8 +31,8 @@ export function DieVisual({ value, sides, rolling, className = '' }: DieVisualPr
       className={[
         'vng-die-visual__svg',
         rolling ? 'vng-die-visual__svg--rolling' : '',
-        crit ? 'vng-die-visual--crit' : '',
-        fumble ? 'vng-die-visual--fumble' : '',
+        maxRoll ? 'vng-die-visual--max' : '',
+        minRoll ? 'vng-die-visual--min' : '',
         className,
       ]
         .filter(Boolean)

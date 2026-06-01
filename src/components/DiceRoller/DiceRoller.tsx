@@ -278,7 +278,7 @@ export function DiceRoller({
             {DICE_TYPES.map(({ label, sides }) => {
               const active = selectedSides === sides
               const wandererCard = sides === 20 && effectiveWandererMode
-              const renderedLabel = wandererCard ? 'ДЕСЯТИУГОЛЬНИК + ШЕСТИУГОЛЬНИК' : label
+              const renderedLabel = wandererCard ? 'D5 + D12' : label
               return (
                 <button
                   key={sides}
