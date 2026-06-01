@@ -380,7 +380,7 @@ export async function fetchPlaylistEntries(url, cursor = '') {
   const playlistId = parseYoutubePlaylistId(url)
   if (!playlistId) return { error: 'Нужна корректная ссылка на YouTube playlist', entries: [], next_cursor: null }
   const continuationToken = decodePlaylistCursor(cursor)
-  const PAGE_SIZE = 100
+  const PAGE_SIZE = 25
   try {
     const bootstrap = await fetchYoutubePlaylistBootstrap(playlistId)
     if (bootstrap.error) return { error: bootstrap.error, entries: [], next_cursor: null }
