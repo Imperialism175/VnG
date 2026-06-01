@@ -231,10 +231,16 @@ async function fetchYoutubePlaylistBootstrap(playlistId) {
 }
 
 async function fetchYoutubePlaylistContinuationPage(apiKey, context, continuationToken, headersMeta = {}) {
-  const clientName = Number(headersMeta.clientName ?? 1) || 1
+  const contextClientName = String(context?.client?.clientName ?? 'WEB').trim().toUpperCase()
+  const clientNameMap = {
+    WEB: 1,
+    WEB_REMIX: 67,
+  }
+  const clientName = Number(headersMeta.clientName ?? clientNameMap[contextClientName] ?? 1) || 1
   const clientVersion = String(headersMeta.clientVersion ?? context?.client?.clientVersion ?? '2.20240601.00.00').trim()
   const visitorData = String(headersMeta.visitorData ?? context?.client?.visitorData ?? '').trim()
-  const contRes = await fetch(`https://www.youtube.com/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
+  const endpointHost = String(headersMeta.endpointHost ?? 'www.youtube.com').trim() || 'www.youtube.com'
+  const contRes = await fetch(`https://${endpointHost}/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -253,6 +259,68 @@ async function fetchYoutubePlaylistContinuationPage(apiKey, context, continuatio
   if (!contRes.ok) return { error: `Не удалось загрузить следующую страницу (HTTP ${contRes.status})`, payload: null }
   const payload = await contRes.json()
   return { error: null, payload }
+}
+
+function makeContinuationFallbacks(baseContext, meta = {}) {
+  const visitorData = String(meta.visitorData ?? baseContext?.client?.visitorData ?? '').trim()
+  const baseVersion = String(meta.clientVersion ?? baseContext?.client?.clientVersion ?? '2.20240601.00.00').trim()
+  return [
+    {
+      endpointHost: 'www.youtube.com',
+      context: baseContext,
+      clientName: Number(meta.clientName ?? 1) || 1,
+      clientVersion: baseVersion,
+      visitorData,
+    },
+    {
+      endpointHost: 'music.youtube.com',
+      context: baseContext,
+      clientName: Number(meta.clientName ?? 1) || 1,
+      clientVersion: baseVersion,
+      visitorData,
+    },
+    {
+      endpointHost: 'www.youtube.com',
+      context: {
+        client: {
+          clientName: 'WEB',
+          clientVersion: baseVersion || '2.20240601.00.00',
+          hl: 'ru',
+          gl: 'US',
+          ...(visitorData ? { visitorData } : {}),
+        },
+      },
+      clientName: 1,
+      clientVersion: baseVersion || '2.20240601.00.00',
+      visitorData,
+    },
+    {
+      endpointHost: 'music.youtube.com',
+      context: {
+        client: {
+          clientName: 'WEB_REMIX',
+          clientVersion: baseVersion || '1.20240603.01.00',
+          hl: 'ru',
+          gl: 'US',
+          ...(visitorData ? { visitorData } : {}),
+        },
+      },
+      clientName: 67,
+      clientVersion: baseVersion || '1.20240603.01.00',
+      visitorData,
+    },
+  ]
+}
+
+async function fetchContinuationWithFallbacks(apiKey, context, continuationToken, meta = {}) {
+  const attempts = makeContinuationFallbacks(context, meta)
+  let lastError = null
+  for (const attempt of attempts) {
+    const res = await fetchYoutubePlaylistContinuationPage(apiKey, attempt.context, continuationToken, attempt)
+    if (!res.error && res.payload) return res
+    lastError = res.error ?? lastError
+  }
+  return { error: lastError ?? 'Не удалось загрузить следующую страницу плейлиста', payload: null }
 }
 
 async function fetchYoutubePlaylistBrowseRoot(apiKey, context, playlistId, headersMeta = {}) {
@@ -481,7 +549,7 @@ export async function fetchPlaylistEntries(url, cursor = '') {
         const currentToken = nextToken
         seenTokens.add(nextToken)
         pages += 1
-        const continuationPage = await fetchYoutubePlaylistContinuationPage(apiKey, bootstrap.context, nextToken, {
+        const continuationPage = await fetchContinuationWithFallbacks(apiKey, bootstrap.context, nextToken, {
           clientName: bootstrap.clientName,
           clientVersion: bootstrap.clientVersion,
           visitorData: bootstrap.visitorData,
@@ -534,7 +602,7 @@ export async function fetchPlaylistEntries(url, cursor = '') {
       const currentToken = nextToken
       seenTokens.add(nextToken)
       pages += 1
-      const continuationPage = await fetchYoutubePlaylistContinuationPage(apiKey, bootstrap.context, nextToken, {
+      const continuationPage = await fetchContinuationWithFallbacks(apiKey, bootstrap.context, nextToken, {
         clientName: bootstrap.clientName,
         clientVersion: bootstrap.clientVersion,
         visitorData: bootstrap.visitorData,
