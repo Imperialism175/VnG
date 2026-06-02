@@ -1,9 +1,49 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { parseYoutubeVideoId } from './roomExtras.js'
 
 const hubs = new Map()
 
 const DIRECT_AUDIO = /\.(mp3|ogg|opus|wav|m4a|aac|flac|webm)(\?|$)/i
+const YOUTUBE_COOKIE = String(process.env.YOUTUBE_COOKIE ?? '').trim()
+
+function getCookieValue(cookieHeader, key) {
+  if (!cookieHeader || !key) return ''
+  const parts = String(cookieHeader).split(';')
+  const target = String(key).trim()
+  for (const part of parts) {
+    const idx = part.indexOf('=')
+    if (idx < 0) continue
+    const name = part.slice(0, idx).trim()
+    if (name !== target) continue
+    return part.slice(idx + 1).trim()
+  }
+  return ''
+}
+
+function buildYoutubeAuthHeaders(origin) {
+  if (!YOUTUBE_COOKIE) return {}
+  const sapisid =
+    getCookieValue(YOUTUBE_COOKIE, 'SAPISID') ||
+    getCookieValue(YOUTUBE_COOKIE, '__Secure-3PAPISID') ||
+    getCookieValue(YOUTUBE_COOKIE, '__Secure-1PAPISID')
+  if (!sapisid) return {}
+  const now = Math.floor(Date.now() / 1000)
+  const hash = createHash('sha1').update(`${now} ${sapisid} ${origin}`).digest('hex')
+  return {
+    Authorization: `SAPISIDHASH ${now}_${hash}`,
+    'X-Origin': origin,
+    'X-Goog-AuthUser': '0',
+  }
+}
+
+function buildYoutubeRequestHeaders(baseHeaders = {}, origin = 'https://www.youtube.com') {
+  return {
+    'User-Agent': 'Mozilla/5.0 (VnG playlist loader)',
+    ...(YOUTUBE_COOKIE ? { Cookie: YOUTUBE_COOKIE } : {}),
+    ...buildYoutubeAuthHeaders(origin),
+    ...baseHeaders,
+  }
+}
 
 export function detectMusicSource(url) {
   if (!url) return null
@@ -242,7 +282,7 @@ async function fetchYoutubePlaylistBootstrap(playlistId) {
   let lastStatus = 0
   for (const pageUrl of urls) {
     const pageRes = await fetch(pageUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (VnG playlist loader)' },
+      headers: buildYoutubeRequestHeaders({}, new URL(pageUrl).origin),
     })
     if (!pageRes.ok) {
       lastStatus = pageRes.status
@@ -253,7 +293,7 @@ async function fetchYoutubePlaylistBootstrap(playlistId) {
   }
   if (!html) {
     const fallbackRes = await fetch('https://www.youtube.com/?hl=ru', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (VnG playlist loader)' },
+      headers: buildYoutubeRequestHeaders(),
     })
     if (fallbackRes.ok) {
       html = await fallbackRes.text()
@@ -302,17 +342,17 @@ async function fetchYoutubePlaylistContinuationPage(apiKey, context, continuatio
   const clientVersion = String(headersMeta.clientVersion ?? context?.client?.clientVersion ?? '2.20240601.00.00').trim()
   const visitorData = String(headersMeta.visitorData ?? context?.client?.visitorData ?? '').trim()
   const endpointHost = String(headersMeta.endpointHost ?? 'www.youtube.com').trim() || 'www.youtube.com'
+  const origin = `https://${endpointHost}`
   const contRes = await fetch(`https://${endpointHost}/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
-    headers: {
+    headers: buildYoutubeRequestHeaders({
       'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (VnG playlist loader)',
       'X-YouTube-Client-Name': String(clientName),
       'X-YouTube-Client-Version': clientVersion,
       ...(visitorData ? { 'X-Goog-Visitor-Id': visitorData } : {}),
-      Referer: 'https://www.youtube.com/',
-      Origin: 'https://www.youtube.com',
-    },
+      Referer: `${origin}/`,
+      Origin: origin,
+    }, origin),
     body: JSON.stringify({
       context,
       continuation: continuationToken,
@@ -395,17 +435,17 @@ async function fetchYoutubePlaylistBrowseRoot(apiKey, context, playlistId, heade
   const clientVersion = String(headersMeta.clientVersion ?? context?.client?.clientVersion ?? '2.20240601.00.00').trim()
   const visitorData = String(headersMeta.visitorData ?? context?.client?.visitorData ?? '').trim()
   const endpointHost = String(headersMeta.endpointHost ?? 'www.youtube.com').trim() || 'www.youtube.com'
+  const origin = `https://${endpointHost}`
   const res = await fetch(`https://${endpointHost}/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
-    headers: {
+    headers: buildYoutubeRequestHeaders({
       'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (VnG playlist loader)',
       'X-YouTube-Client-Name': String(clientName),
       'X-YouTube-Client-Version': clientVersion,
       ...(visitorData ? { 'X-Goog-Visitor-Id': visitorData } : {}),
-      Referer: 'https://www.youtube.com/',
-      Origin: 'https://www.youtube.com',
-    },
+      Referer: `${origin}/`,
+      Origin: origin,
+    }, origin),
     body: JSON.stringify({
       context,
       browseId: `VL${playlistId}`,
@@ -681,7 +721,7 @@ export async function fetchPlaylistEntries(url, cursor = '') {
       if (!entries.length) {
         // Fallback to RSS feed when page parsing fails.
         const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`
-        const res = await fetch(feedUrl, { headers: { 'User-Agent': 'VnG/1.0' } })
+        const res = await fetch(feedUrl, { headers: buildYoutubeRequestHeaders({ 'User-Agent': 'VnG/1.0' }) })
         if (!res.ok) return { error: `Не удалось загрузить плейлист (HTTP ${res.status})`, entries: [], next_cursor: null }
         const xml = await res.text()
         const entryBlocks = xml.match(/<entry>[\s\S]*?<\/entry>/g) ?? []
