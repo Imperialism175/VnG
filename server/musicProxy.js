@@ -171,6 +171,68 @@ function decodePlaylistCursor(value) {
   }
 }
 
+async function fetchPlaylistViaNoKeyApi(playlistId) {
+  const MAX_TRACKS = 20000
+  const MAX_PAGES = 500
+  let pageToken = ''
+  let pages = 0
+  const out = []
+  while (pages < MAX_PAGES && out.length < MAX_TRACKS) {
+    pages += 1
+    const params = new URLSearchParams({
+      part: 'snippet',
+      playlistId,
+      maxResults: '50',
+    })
+    if (pageToken) params.set('pageToken', pageToken)
+    const res = await fetch(`https://yt.lemnoslife.com/noKey/playlistItems?${params.toString()}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (VnG playlist loader)' },
+    })
+    if (!res.ok) return { error: `noKey API HTTP ${res.status}`, entries: [] }
+    const data = await res.json().catch(() => null)
+    const items = Array.isArray(data?.items) ? data.items : []
+    for (const item of items) {
+      const snippet = item?.snippet ?? {}
+      const videoId = String(
+        snippet?.resourceId?.videoId ?? snippet?.videoId ?? item?.contentDetails?.videoId ?? ''
+      ).trim()
+      if (!videoId) continue
+      const thumbs = snippet?.thumbnails ?? {}
+      const thumb =
+        String(
+          thumbs?.maxres?.url ??
+            thumbs?.standard?.url ??
+            thumbs?.high?.url ??
+            thumbs?.medium?.url ??
+            thumbs?.default?.url ??
+            ''
+        ).trim() || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+      const title = String(snippet?.title ?? '').trim().slice(0, 200) || `Трек ${out.length + 1}`
+      out.push({
+        id: videoId,
+        title,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        thumbnail_url: thumb,
+      })
+      if (out.length >= MAX_TRACKS) break
+    }
+    const next = String(data?.nextPageToken ?? '').trim()
+    if (!next) break
+    if (next === pageToken) break
+    pageToken = next
+  }
+  const dedup = []
+  const seen = new Set()
+  for (const entry of out) {
+    const key = `${entry.id}|${entry.url}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    dedup.push(entry)
+  }
+  if (!dedup.length) return { error: 'noKey API вернул пустой список', entries: [] }
+  return { error: null, entries: dedup }
+}
+
 async function fetchYoutubePlaylistBootstrap(playlistId) {
   const urls = [
     `https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}&hl=ru`,
@@ -589,6 +651,13 @@ export async function fetchPlaylistEntries(url, cursor = '') {
   if (!playlistId) return { error: 'Нужна корректная ссылка на YouTube playlist', entries: [], next_cursor: null }
   const continuationToken = decodePlaylistCursor(cursor)
   try {
+    if (!continuationToken) {
+      const noKey = await fetchPlaylistViaNoKeyApi(playlistId).catch(() => ({ error: 'noKey failed', entries: [] }))
+      if (!noKey.error && noKey.entries.length) {
+        return { error: null, entries: noKey.entries, next_cursor: null }
+      }
+    }
+
     const bootstrap = await fetchYoutubePlaylistBootstrap(playlistId)
     if (bootstrap.error) return { error: bootstrap.error, entries: [], next_cursor: null }
 
