@@ -324,10 +324,16 @@ async function fetchContinuationWithFallbacks(apiKey, context, continuationToken
 }
 
 async function fetchYoutubePlaylistBrowseRoot(apiKey, context, playlistId, headersMeta = {}) {
-  const clientName = Number(headersMeta.clientName ?? 1) || 1
+  const contextClientName = String(context?.client?.clientName ?? 'WEB').trim().toUpperCase()
+  const clientNameMap = {
+    WEB: 1,
+    WEB_REMIX: 67,
+  }
+  const clientName = Number(headersMeta.clientName ?? clientNameMap[contextClientName] ?? 1) || 1
   const clientVersion = String(headersMeta.clientVersion ?? context?.client?.clientVersion ?? '2.20240601.00.00').trim()
   const visitorData = String(headersMeta.visitorData ?? context?.client?.visitorData ?? '').trim()
-  const res = await fetch(`https://www.youtube.com/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
+  const endpointHost = String(headersMeta.endpointHost ?? 'www.youtube.com').trim() || 'www.youtube.com'
+  const res = await fetch(`https://${endpointHost}/youtubei/v1/browse?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -346,6 +352,68 @@ async function fetchYoutubePlaylistBrowseRoot(apiKey, context, playlistId, heade
   if (!res.ok) return { error: `Не удалось открыть root плейлиста (HTTP ${res.status})`, payload: null }
   const payload = await res.json()
   return { error: null, payload }
+}
+
+function makeBrowseRootFallbacks(baseContext, meta = {}) {
+  const visitorData = String(meta.visitorData ?? baseContext?.client?.visitorData ?? '').trim()
+  const baseVersion = String(meta.clientVersion ?? baseContext?.client?.clientVersion ?? '2.20240601.00.00').trim()
+  return [
+    {
+      endpointHost: 'www.youtube.com',
+      context: baseContext,
+      clientName: Number(meta.clientName ?? 1) || 1,
+      clientVersion: baseVersion,
+      visitorData,
+    },
+    {
+      endpointHost: 'music.youtube.com',
+      context: baseContext,
+      clientName: Number(meta.clientName ?? 1) || 1,
+      clientVersion: baseVersion,
+      visitorData,
+    },
+    {
+      endpointHost: 'www.youtube.com',
+      context: {
+        client: {
+          clientName: 'WEB',
+          clientVersion: baseVersion || '2.20240601.00.00',
+          hl: 'ru',
+          gl: 'US',
+          ...(visitorData ? { visitorData } : {}),
+        },
+      },
+      clientName: 1,
+      clientVersion: baseVersion || '2.20240601.00.00',
+      visitorData,
+    },
+    {
+      endpointHost: 'music.youtube.com',
+      context: {
+        client: {
+          clientName: 'WEB_REMIX',
+          clientVersion: baseVersion || '1.20240603.01.00',
+          hl: 'ru',
+          gl: 'US',
+          ...(visitorData ? { visitorData } : {}),
+        },
+      },
+      clientName: 67,
+      clientVersion: baseVersion || '1.20240603.01.00',
+      visitorData,
+    },
+  ]
+}
+
+async function fetchBrowseRootWithFallbacks(apiKey, context, playlistId, meta = {}) {
+  const attempts = makeBrowseRootFallbacks(context, meta)
+  let lastError = null
+  for (const attempt of attempts) {
+    const res = await fetchYoutubePlaylistBrowseRoot(apiKey, attempt.context, playlistId, attempt)
+    if (!res.error && res.payload) return res
+    lastError = res.error ?? lastError
+  }
+  return { error: lastError ?? 'Не удалось открыть root плейлиста', payload: null }
 }
 
 class RoomMusicHub {
@@ -532,7 +600,7 @@ export async function fetchPlaylistEntries(url, cursor = '') {
       let nextToken = bootstrap.initialData ? findContinuationToken(bootstrap.initialData) : null
       const apiKey = String(bootstrap.apiKey ?? '').trim()
       if (apiKey && (entriesMap.size === 0 || !nextToken)) {
-        const root = await fetchYoutubePlaylistBrowseRoot(apiKey, bootstrap.context, playlistId, {
+        const root = await fetchBrowseRootWithFallbacks(apiKey, bootstrap.context, playlistId, {
           clientName: bootstrap.clientName,
           clientVersion: bootstrap.clientVersion,
           visitorData: bootstrap.visitorData,
