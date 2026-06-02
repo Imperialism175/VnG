@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FlashlightOff, Flashlight, Music, Vote, MessageSquareQuote } from 'lucide-react'
 import type { Player, RoomMusic, RoomTheme } from '@/types'
 import { apiGetPlaylistEntries, type PlaylistEntry } from '@/lib/api'
@@ -197,7 +197,7 @@ export function GmRoomTools({
     }
   }
 
-  async function handleLoadMorePlaylist() {
+  const handleLoadMorePlaylist = useCallback(async () => {
     const url = playlistUrl.trim()
     if (!url || !playlistNextCursor || playlistLoading || playlistLoadingMore) return
     setPlaylistLoadingMore(true)
@@ -222,7 +222,15 @@ export function GmRoomTools({
     } finally {
       setPlaylistLoadingMore(false)
     }
-  }
+  }, [playlistLoading, playlistLoadingMore, playlistNextCursor, playlistUrl])
+
+  useEffect(() => {
+    if (!playlistNextCursor || playlistLoading || playlistLoadingMore) return
+    const timer = window.setTimeout(() => {
+      void handleLoadMorePlaylist()
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [playlistNextCursor, playlistLoading, playlistLoadingMore, handleLoadMorePlaylist])
 
   function chooseNextPlaylistTrack() {
     if (filteredPlaylistEntries.length === 0) return null
