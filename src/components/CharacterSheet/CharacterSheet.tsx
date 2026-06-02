@@ -176,20 +176,6 @@ function syncHintCounter(
   return [...counters, { id: generateId(), name: 'Подсказки', current: hintMax, max: hintMax }]
 }
 
-function evaluateCalculatorExpression(expr: string): { ok: true; value: string } | { ok: false; error: string } {
-  const normalized = String(expr ?? '').replace(/,/g, '.').trim()
-  if (!normalized) return { ok: false, error: 'Введите выражение' }
-  if (!/^[\d+\-*/%.()\s]+$/.test(normalized)) return { ok: false, error: 'Недопустимые символы' }
-  try {
-    const result = Function(`"use strict"; return (${normalized});`)()
-    if (typeof result !== 'number' || !Number.isFinite(result)) return { ok: false, error: 'Ошибка вычисления' }
-    const pretty = Number.isInteger(result) ? String(result) : String(Number(result.toFixed(6)))
-    return { ok: true, value: pretty }
-  } catch {
-    return { ok: false, error: 'Неверное выражение' }
-  }
-}
-
 function toRoundedNumberOrNull(value: string): number | null {
   const n = Number(value)
   if (!Number.isFinite(n)) return null
@@ -562,9 +548,6 @@ export function CharacterSheet({
   const [showThresholdTable, setShowThresholdTable] = useState(false)
   const [rotationStep, setRotationStep] = useState<0 | 1 | 2>(0)
   const [swapTargets, setSwapTargets] = useState<Record<string, string>>({})
-  const [calculatorInput, setCalculatorInput] = useState('')
-  const [calculatorResult, setCalculatorResult] = useState('')
-  const [calculatorError, setCalculatorError] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const researcherMode = isResearcherSheet(local.sheet_preset_id ?? null, local.class_status)
@@ -595,17 +578,6 @@ export function CharacterSheet({
 
   function updateField<K extends keyof Character>(key: K, value: Character[K]) {
     scheduleSave({ ...local, [key]: value })
-  }
-
-  function runCalculator() {
-    const evaluated = evaluateCalculatorExpression(calculatorInput)
-    if (evaluated.ok) {
-      setCalculatorResult(evaluated.value)
-      setCalculatorError('')
-      return
-    }
-    setCalculatorResult('')
-    setCalculatorError(evaluated.error)
   }
 
   async function downloadSheet() {
@@ -1495,41 +1467,6 @@ export function CharacterSheet({
               </div>
             </div>
           )}
-          <div className="mt-3 rounded-lg border border-vng-border/80 bg-vng-bg/60 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-vng-muted mb-2">Калькулятор</p>
-            <div className="flex items-center gap-2">
-              <input
-                className="flex-1 px-2 py-1 text-sm rounded bg-vng-elevated border border-vng-border focus:outline-none focus:border-vng-amber/40"
-                value={calculatorInput}
-                onChange={(e) => setCalculatorInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') runCalculator()
-                }}
-                placeholder="Например: (12 + 5) * 3"
-              />
-              <Button size="sm" type="button" onClick={runCalculator}>
-                =
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                type="button"
-                onClick={() => {
-                  setCalculatorInput('')
-                  setCalculatorResult('')
-                  setCalculatorError('')
-                }}
-              >
-                Сброс
-              </Button>
-            </div>
-            {calculatorResult && (
-              <p className="mt-2 text-sm text-vng-amber vng-mono">Результат: {calculatorResult}</p>
-            )}
-            {calculatorError && (
-              <p className="mt-2 text-xs text-vng-danger">{calculatorError}</p>
-            )}
-          </div>
         </section>
         )}
         </div>
