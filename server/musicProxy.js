@@ -5,6 +5,7 @@ const hubs = new Map()
 
 const DIRECT_AUDIO = /\.(mp3|ogg|opus|wav|m4a|aac|flac|webm)(\?|$)/i
 const YOUTUBE_COOKIE = String(process.env.YOUTUBE_COOKIE ?? '').trim()
+const YOUTUBE_API_KEY = String(process.env.YOUTUBE_API_KEY ?? '').trim()
 
 function getCookieValue(cookieHeader, key) {
   if (!cookieHeader || !key) return ''
@@ -270,6 +271,72 @@ async function fetchPlaylistViaNoKeyApi(playlistId) {
     dedup.push(entry)
   }
   if (!dedup.length) return { error: 'noKey API вернул пустой список', entries: [] }
+  return { error: null, entries: dedup }
+}
+
+async function fetchPlaylistViaYoutubeDataApi(playlistId) {
+  if (!YOUTUBE_API_KEY) return { error: 'YOUTUBE_API_KEY не задан', entries: [] }
+  const MAX_TRACKS = 50000
+  const MAX_PAGES = 1000
+  let pageToken = ''
+  let pages = 0
+  const out = []
+  while (pages < MAX_PAGES && out.length < MAX_TRACKS) {
+    pages += 1
+    const params = new URLSearchParams({
+      part: 'snippet,contentDetails,status',
+      playlistId,
+      maxResults: '50',
+      key: YOUTUBE_API_KEY,
+    })
+    if (pageToken) params.set('pageToken', pageToken)
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (VnG playlist loader)' },
+    })
+    if (!res.ok) return { error: `YouTube Data API HTTP ${res.status}`, entries: [] }
+    const data = await res.json().catch(() => null)
+    const items = Array.isArray(data?.items) ? data.items : []
+    for (const item of items) {
+      const snippet = item?.snippet ?? {}
+      if (String(snippet?.title ?? '').toLowerCase() === 'deleted video') continue
+      if (String(snippet?.title ?? '').toLowerCase() === 'private video') continue
+      const videoId = String(
+        snippet?.resourceId?.videoId ?? item?.contentDetails?.videoId ?? ''
+      ).trim()
+      if (!videoId) continue
+      const thumbs = snippet?.thumbnails ?? {}
+      const thumb =
+        String(
+          thumbs?.maxres?.url ??
+            thumbs?.standard?.url ??
+            thumbs?.high?.url ??
+            thumbs?.medium?.url ??
+            thumbs?.default?.url ??
+            ''
+        ).trim() || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+      const title = String(snippet?.title ?? '').trim().slice(0, 200) || `Трек ${out.length + 1}`
+      out.push({
+        id: videoId,
+        title,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        thumbnail_url: thumb,
+      })
+      if (out.length >= MAX_TRACKS) break
+    }
+    const next = String(data?.nextPageToken ?? '').trim()
+    if (!next) break
+    if (next === pageToken) break
+    pageToken = next
+  }
+  const dedup = []
+  const seen = new Set()
+  for (const entry of out) {
+    const key = `${entry.id}|${entry.url}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    dedup.push(entry)
+  }
+  if (!dedup.length) return { error: 'YouTube Data API вернул пустой список', entries: [] }
   return { error: null, entries: dedup }
 }
 
@@ -692,6 +759,11 @@ export async function fetchPlaylistEntries(url, cursor = '') {
   const continuationToken = decodePlaylistCursor(cursor)
   try {
     if (!continuationToken) {
+      const official = await fetchPlaylistViaYoutubeDataApi(playlistId).catch(() => ({ error: 'data api failed', entries: [] }))
+      if (!official.error && official.entries.length) {
+        return { error: null, entries: official.entries, next_cursor: null }
+      }
+
       const noKey = await fetchPlaylistViaNoKeyApi(playlistId).catch(() => ({ error: 'noKey failed', entries: [] }))
       if (!noKey.error && noKey.entries.length) {
         return { error: null, entries: noKey.entries, next_cursor: null }
