@@ -72,6 +72,16 @@ export function GmPlayerSheets({
     setSelectedId(null)
   }
 
+  function handleToggleNpcVisibility() {
+    if (!active?.character || !active.isNpc) return
+    const nextVisibility = active.character.npc_visibility === 'full' ? 'restricted' : 'full'
+    onSave({
+      ...active.character,
+      npc_visibility: nextVisibility,
+      in_party: nextVisibility === 'full',
+    })
+  }
+
   if (roster.length === 0) {
     return (
       <div className="vng-card p-6 text-center space-y-3">
@@ -138,6 +148,11 @@ export function GmPlayerSheets({
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs text-vng-muted">Режим просмотра: ГМ</p>
             <div className="flex items-center gap-2">
+              {active.isNpc && (
+                <Button type="button" size="sm" variant="secondary" onClick={handleToggleNpcVisibility}>
+                  {active.character.npc_visibility === 'full' ? 'Закрыть НПС для игроков' : 'Открыть НПС для игроков'}
+                </Button>
+              )}
               {active.isNpc && (
                 <Button type="button" size="sm" variant="danger" onClick={handleDeleteNpc}>
                   Удалить НПС

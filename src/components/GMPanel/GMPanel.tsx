@@ -90,6 +90,7 @@ export function GMPanel({
             <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
               {roster.map((entry) => {
                 const char = entry.character
+                const npcEntry = Boolean(char?.is_npc) || isNpcPlayerId(entry.playerId)
                 const hp = hpSummary(char)
                 const inspiration = char?.counters?.find((c) => /вдох|inspir/i.test(c.name))
                 const displayName = char?.name?.trim() || entry.playerName
@@ -158,15 +159,17 @@ export function GMPanel({
                       >
                         [-1 ВДОХ]
                       </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        type="button"
-                        onClick={() => handleTransfer(entry.playerId)}
-                        aria-label="Передать права ГМа"
-                      >
-                        [ПЕРЕДАТЬ ПРАВА ГМА]
-                      </Button>
+                      {!npcEntry && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          type="button"
+                          onClick={() => handleTransfer(entry.playerId)}
+                          aria-label="Передать права ГМа"
+                        >
+                          [ПЕРЕДАТЬ ПРАВА ГМА]
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )

@@ -555,6 +555,7 @@ export function CharacterSheet({
 }: CharacterSheetProps) {
   const viewOnly = readOnly || restrictedView
   const canEdit = !viewOnly || Boolean(gmEditing)
+  const canDownloadSheet = !(restrictedView && Boolean(local.is_npc) && !gmEditing)
   /** Игроки никогда не редактируют HP; ГМ — только без lockHp */
   const healthLocked = !gmEditing || Boolean(lockHp)
   const [local, setLocal] = useState(character)
@@ -1111,13 +1112,6 @@ export function CharacterSheet({
         )}
       <div className="relative z-10 h-full min-h-0 overflow-y-auto px-3 sm:px-4 py-2 pr-3 sm:pr-4">
         <div className="flex flex-col gap-4 min-h-0">
-        {restrictedView && (
-          <p className="text-xs text-vng-muted border border-vng-border px-2 py-1.5 leading-relaxed">
-            Полный лист доступен только владельцу, игрокам отряда и NPC, отмеченным мастером как члены
-            пати. Остальные данные скрыты.
-          </p>
-        )}
-
         <Input
           label="Имя"
           value={local.name}
@@ -1126,7 +1120,7 @@ export function CharacterSheet({
           disabled={!canEdit}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" variant="secondary" onClick={downloadSheet}>
+          <Button type="button" size="sm" variant="secondary" onClick={downloadSheet} disabled={!canDownloadSheet}>
             Скачать листик
           </Button>
           {canEdit && (

@@ -970,6 +970,11 @@ wss.on('connection', (ws, req) => {
     }
 
     if (msg.type === 'CHANGE_GM' && player.is_gm) {
+      const targetId = String(msg.new_gm_id ?? '')
+      if (!targetId || targetId.startsWith('npc-')) {
+        send(ws, { type: 'ERROR', message: 'Нельзя передать права ГМа НПС' })
+        return
+      }
       const next = room.players.get(msg.new_gm_id)
       if (!next || msg.new_gm_id === playerId) return
       for (const p of room.players.values()) p.is_gm = p.id === msg.new_gm_id
