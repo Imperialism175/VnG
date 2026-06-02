@@ -555,10 +555,10 @@ export function CharacterSheet({
 }: CharacterSheetProps) {
   const viewOnly = readOnly || restrictedView
   const canEdit = !viewOnly || Boolean(gmEditing)
-  const canDownloadSheet = !(restrictedView && Boolean(local.is_npc) && !gmEditing)
   /** Игроки никогда не редактируют HP; ГМ — только без lockHp */
   const healthLocked = !gmEditing || Boolean(lockHp)
   const [local, setLocal] = useState(character)
+  const canDownloadSheet = !(restrictedView && Boolean(local.is_npc) && !gmEditing)
   const [showThresholdTable, setShowThresholdTable] = useState(false)
   const [rotationStep, setRotationStep] = useState<0 | 1 | 2>(0)
   const [swapTargets, setSwapTargets] = useState<Record<string, string>>({})
