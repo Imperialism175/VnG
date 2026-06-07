@@ -6,7 +6,19 @@ function rollDie(sides) {
   return Math.floor(Math.random() * sides) + 1
 }
 
-export function parseAndRoll(expression) {
+function rollDieWithCheat(sides, cheatBySides, alwaysMax = false) {
+  if (alwaysMax) return sides
+  const key = String(sides)
+  if (cheatBySides && Object.prototype.hasOwnProperty.call(cheatBySides, key)) {
+    const forced = Number(cheatBySides[key])
+    if (Number.isFinite(forced)) {
+      return Math.max(1, Math.min(sides, Math.round(forced)))
+    }
+  }
+  return rollDie(sides)
+}
+
+export function parseAndRoll(expression, cheatBySides = null, cheatOpts = {}) {
   const trimmed = expression.trim().toLowerCase().replace(/\s+/g, '')
   if (!trimmed) throw new Error('Пустое выражение')
 
@@ -30,9 +42,17 @@ export function parseAndRoll(expression) {
     if (count < 1 || count > MAX_DICE_PER_ROLL) {
       throw new Error(`Можно бросать от 1 до ${MAX_DICE_PER_ROLL} кубиков за раз`)
     }
-    for (let i = 0; i < count; i++) rolls.push(rollDie(sides))
+    for (let i = 0; i < count; i++) {
+      rolls.push(rollDieWithCheat(sides, cheatBySides, Boolean(cheatOpts.alwaysMax)))
+    }
   }
   if (!found) throw new Error('Формат: 2d20+3')
+
+  if (cheatOpts.forceJackpot && /^1d5\+1d12$/i.test(trimmed) && rolls.length >= 2) {
+    const lucky = Math.min(5, Math.max(2, Math.floor(Math.random() * 4) + 2))
+    rolls[0] = lucky
+    rolls[1] = lucky
+  }
 
   const total = rolls.reduce((a, b) => a + b, 0) + modifier
   return { expression: trimmed, total, rolls, modifier }

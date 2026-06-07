@@ -1219,6 +1219,16 @@ textarea[class*="border-vng"] {
   overflow: hidden;
 }
 
+.vng-room-layout__roster > *,
+.vng-room-layout__side > * {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
 .vng-room-layout__roster {
   height: 9.5rem;
   max-height: 11rem;
@@ -2125,5 +2135,527 @@ textarea[class*="border-vng"] {
   }
   50% {
     filter: brightness(1.12);
+  }
+}
+
+/* ── Pro Max premium variant (структура та же, только визуал) ── */
+.vng-room-shell[data-vng-theme-variant="premium"] {
+  --vng-theme-transition-duration: 0.65s;
+  --vng-theme-transition-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --vng-premium-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --vng-premium-radius-sm: 10px;
+  --vng-premium-radius-md: 14px;
+  --vng-premium-radius-lg: 18px;
+  --vng-premium-gap: 12px;
+  --vng-premium-grid-line: color-mix(in srgb, var(--vng-dos-accent) 8%, transparent);
+  font-family: "Ubuntu", "Segoe UI", system-ui, -apple-system, sans-serif !important;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  font-smooth: auto;
+  scroll-behavior: smooth;
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse 130% 90% at 50% -24%, color-mix(in srgb, var(--vng-dos-accent) 14%, transparent), transparent 58%),
+    radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--vng-dos-accent) 6%, transparent), transparent 32%),
+    linear-gradient(180deg, color-mix(in srgb, var(--vng-dos-bg) 96%, #000000), var(--vng-dos-bg)) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: max(0.12, calc(0.35 * ((100 - var(--vng-stage-light, 100)) / 100)));
+  background-image:
+    linear-gradient(var(--vng-premium-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--vng-premium-grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 20%, #000 20%, transparent 75%);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"][data-vng-premium-grid="0"]::before {
+  display: none;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.42;
+  mix-blend-mode: screen;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-hero {
+  position: relative;
+  z-index: 40;
+  flex-shrink: 0;
+  border-radius: 0 !important;
+  transform: none !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--vng-dos-accent) 18%, var(--vng-dos-border)) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--vng-dos-bg) 35%, transparent), color-mix(in srgb, var(--vng-dos-bg) 72%, transparent)) !important;
+  backdrop-filter: blur(18px) saturate(1.45);
+  box-shadow: 0 10px 40px color-mix(in srgb, #000000 28%, transparent);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dos-hud__grid {
+  padding: 0.35rem 0.65rem !important;
+  gap: 0.1rem;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dos-hud__row {
+  opacity: 1 !important;
+  transform: none !important;
+  min-height: 1.5rem;
+  align-items: center;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dos-hud__row--primary {
+  padding-bottom: 0.3rem !important;
+  margin-bottom: 0.2rem;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dos-hud,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dos-hud * {
+  transition-property: background-color, border-color, color, box-shadow !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-char {
+  display: inline-block;
+  transform-origin: 50% 100%;
+  will-change: transform, opacity;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-layout__body {
+  gap: var(--vng-premium-gap);
+  padding: var(--vng-premium-gap);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-layout__roster,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-layout__main,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-layout__side {
+  border-radius: var(--vng-premium-radius-lg);
+  overflow: hidden;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-roster,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-sidefeed {
+  border-radius: var(--vng-premium-radius-lg) !important;
+  overflow: hidden !important;
+  border: 1px solid color-mix(in srgb, var(--vng-dos-accent) 20%, var(--vng-dos-border)) !important;
+  background: color-mix(in srgb, var(--vng-dos-bg) 48%, transparent) !important;
+  backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 8%, transparent),
+    0 10px 36px color-mix(in srgb, #000000 38%, transparent) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-sidefeed__body {
+  overflow: hidden !important;
+  overscroll-behavior: contain;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-sidefeed .vng-terminal-panel,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-sidefeed .vng-panel {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-sidefeed .vng-panel > div,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-sidefeed .vng-panel > div > div {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-feed-scroll {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dos-chat-input-wrap {
+  margin-top: 0 !important;
+  padding-top: 0.45rem !important;
+  padding-bottom: 0.35rem !important;
+  flex-shrink: 0 !important;
+  border-top: 1px solid color-mix(in srgb, var(--vng-dos-accent) 18%, var(--vng-dos-border)) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-feed-tab-pane {
+  min-height: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+}
+
+.vng-room-sidefeed .vng-room-feed-panel .vng-panel-header {
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.28rem 0.35rem !important;
+}
+
+.vng-room-sidefeed .vng-room-feed-panel .vng-panel-header > div:first-child {
+  display: none;
+}
+
+.vng-room-sidefeed .vng-terminal-tabs--feed {
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
+}
+
+.vng-room-sidefeed .vng-terminal-tabs--feed button {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 0.625rem !important;
+  padding: 0.2rem 0.15rem !important;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-terminal-tabs {
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  padding: 2px !important;
+  border: 1px solid color-mix(in srgb, var(--vng-dos-accent) 22%, var(--vng-dos-border)) !important;
+  background: color-mix(in srgb, var(--vng-dos-bg) 55%, transparent) !important;
+  gap: 2px !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-terminal-tabs button {
+  border-radius: 999px !important;
+  transition:
+    background-color 0.38s var(--vng-premium-ease),
+    color 0.38s var(--vng-premium-ease),
+    transform 0.42s var(--vng-premium-ease),
+    box-shadow 0.45s var(--vng-premium-ease) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-terminal-tabs button.vng-tab--active {
+  background: var(--vng-dos-accent) !important;
+  color: var(--vng-dos-bg) !important;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--vng-dos-accent) 35%, transparent);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-terminal-tabs button:not(.vng-tab--active):hover {
+  color: var(--vng-dos-fg) !important;
+  background: color-mix(in srgb, var(--vng-dos-accent) 10%, transparent) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-feed-scroll,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-terminal-panel,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-terminal-line,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-mono {
+  font-family: inherit !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-tab-content {
+  animation: vng-premium-tab-in 0.52s var(--vng-premium-ease) both;
+}
+
+@keyframes vng-premium-tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-tab {
+  transition:
+    background-color 0.38s var(--vng-premium-ease),
+    color 0.38s var(--vng-premium-ease),
+    transform 0.42s var(--vng-premium-ease),
+    box-shadow 0.45s var(--vng-premium-ease) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-tabbar {
+  border-radius: var(--vng-premium-radius-lg) var(--vng-premium-radius-lg) 0 0 !important;
+  overflow: hidden;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-panel,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-card,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-panel,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-terminal-panel,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-counter-block {
+  border: 1px solid color-mix(in srgb, var(--vng-dos-accent) 30%, var(--vng-dos-border)) !important;
+  border-radius: var(--vng-premium-radius-md, 14px) !important;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--vng-dos-bg) calc(var(--vng-premium-glass, 58) * 1%), transparent),
+      color-mix(in srgb, var(--vng-dos-bg) calc((var(--vng-premium-glass, 58) + 18) * 1%), transparent)
+    ) !important;
+  backdrop-filter: blur(var(--vng-premium-blur, 16px)) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 10%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--vng-dos-accent) 6%, transparent),
+    0 10px 36px color-mix(in srgb, #000000 38%, transparent),
+    0 0 calc(var(--vng-premium-glow, 48) * 0.45px) color-mix(in srgb, var(--vng-dos-accent) calc(var(--vng-premium-glow, 48) * 1%), transparent);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-layout__main .vng-panel:nth-child(odd),
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-stat-tile:nth-child(3n + 1) {
+  border-radius: var(--vng-premium-radius-lg) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-stat-tile,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-counter-block {
+  border-radius: var(--vng-premium-radius-sm) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-stat-grid,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-counter-grid {
+  display: grid !important;
+  gap: var(--vng-premium-gap) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-stat-tile:nth-child(3n + 1) {
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--vng-dos-accent) 10%, transparent);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-stat-tile:nth-child(4n + 2) {
+  transform: translateY(2px);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-panel-header,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-panel__hero,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-terminal-panel .vng-panel-header,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-sidefeed__head {
+  background: color-mix(in srgb, var(--vng-dos-bg) 38%, transparent) !important;
+  border-bottom-color: color-mix(in srgb, var(--vng-dos-accent) 24%, var(--vng-dos-border)) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-tui-btn,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dice-stepper__btn,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-btn,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-icon-btn,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-tab,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dice-btn,
+.vng-room-shell[data-vng-theme-variant="premium"] button.vng-roll-cta {
+  border-radius: 999px !important;
+  transition:
+    background-color 0.28s var(--vng-premium-ease),
+    color 0.28s var(--vng-premium-ease),
+    border-color 0.28s var(--vng-premium-ease),
+    transform 0.32s var(--vng-premium-ease),
+    box-shadow 0.32s var(--vng-premium-ease);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-magnetic {
+  will-change: transform;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-tui-btn:hover:not(:disabled),
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-btn:hover:not(:disabled),
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-tab:hover:not(:disabled),
+.vng-room-shell[data-vng-theme-variant="premium"] button.vng-roll-cta:hover:not(:disabled) {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--vng-dos-accent) 35%, transparent),
+    0 8px 24px color-mix(in srgb, var(--vng-dos-accent) 24%, transparent);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-tab--active {
+  color: var(--vng-dos-bg) !important;
+  background: var(--vng-dos-accent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--vng-dos-accent) 55%, transparent),
+    0 0 28px color-mix(in srgb, var(--vng-dos-accent) 48%, transparent);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding: 12px;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-reveal {
+  transform-origin: 50% 80%;
+  will-change: transform, opacity;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] input,
+.vng-room-shell[data-vng-theme-variant="premium"] textarea,
+.vng-room-shell[data-vng-theme-variant="premium"] select {
+  border-radius: var(--vng-premium-radius-sm) !important;
+  transition:
+    border-color 0.24s var(--vng-premium-ease),
+    box-shadow 0.24s var(--vng-premium-ease),
+    background-color 0.24s var(--vng-premium-ease);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] input:focus-visible,
+.vng-room-shell[data-vng-theme-variant="premium"] textarea:focus-visible,
+.vng-room-shell[data-vng-theme-variant="premium"] select:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--vng-dos-accent) 65%, var(--vng-dos-border)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vng-dos-accent) 22%, transparent);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dice-throw-pit {
+  border-radius: var(--vng-premium-radius-lg) !important;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--vng-dos-accent) 8%, transparent), transparent 55%),
+    color-mix(in srgb, var(--vng-dos-bg) 52%, transparent) !important;
+  backdrop-filter: blur(12px);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-cheat-menu {
+  border-radius: var(--vng-premium-radius-md);
+  backdrop-filter: blur(20px) saturate(1.45);
+  box-shadow: 0 16px 48px color-mix(in srgb, #000000 48%, transparent);
+}
+
+/* ── Скругления везде + плавные переходы ── */
+.vng-room-shell[data-vng-theme-variant="premium"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.vng-room-shell[data-vng-theme-variant="premium"] textarea,
+.vng-room-shell[data-vng-theme-variant="premium"] select,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-tui-input,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-stat-tile input,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-counter-block input,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-sheet-field input,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-sheet-field textarea,
+.vng-room-shell[data-vng-theme-variant="premium"] button,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-mobile-drawer,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-feed-item,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-event-line,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-die-visual,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dice-stepper,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dice-stepper__btn,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-room-sidefeed__head,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-tui-field,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-player-roster__item,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-hp-bar,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-hp-bar__fill,
+.vng-room-shell[data-vng-theme-variant="premium"] img,
+.vng-room-shell[data-vng-theme-variant="premium"] video {
+  border-radius: var(--vng-premium-radius-sm, 10px) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-panel,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-card,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-panel,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-terminal-panel,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-counter-block,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-dice-throw-pit,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-mobile-drawer,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-cheat-menu {
+  border-radius: var(--vng-premium-radius-md, 14px) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] * {
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity, filter;
+  transition-duration: 0.32s;
+  transition-timing-function: var(--vng-premium-ease);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-hoverable {
+  will-change: transform;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] input:focus-visible,
+.vng-room-shell[data-vng-theme-variant="premium"] textarea:focus-visible,
+.vng-room-shell[data-vng-theme-variant="premium"] select:focus-visible,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-tui-input:focus-visible {
+  transform: translateY(-1px) scale(1.01);
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-retro-tab {
+  transition:
+    background-color 0.35s var(--vng-premium-ease),
+    color 0.35s var(--vng-premium-ease),
+    transform 0.4s var(--vng-premium-ease),
+    box-shadow 0.45s var(--vng-premium-ease) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-panel,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-stat-tile,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-counter-block {
+  transition:
+    transform 0.55s var(--vng-premium-ease),
+    box-shadow 0.55s var(--vng-premium-ease),
+    background-color 0.45s var(--vng-premium-ease),
+    border-color 0.45s var(--vng-premium-ease) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-panel:hover,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-stat-tile:hover,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-counter-block:hover {
+  box-shadow:
+    0 14px 40px color-mix(in srgb, #000000 42%, transparent),
+    0 0 calc(var(--vng-premium-glow, 48) * 0.55px) color-mix(in srgb, var(--vng-dos-accent) 30%, transparent);
+}
+
+@keyframes vng-premium-bg-shift {
+  0%, 100% {
+    background-position: 0% 0%, 100% 0%, 0% 0%;
+  }
+  50% {
+    background-position: 4% 2%, 96% 4%, 0% 0%;
+  }
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"][data-vng-premium-motion="full"],
+.vng-room-shell[data-vng-theme-variant="premium"][data-vng-premium-motion="low"] {
+  animation: vng-premium-bg-shift 18s var(--vng-premium-ease) infinite;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-die-visual {
+  transition:
+    left 0.5s cubic-bezier(0.25, 1, 0.5, 1),
+    top 0.5s cubic-bezier(0.25, 1, 0.5, 1),
+    transform 0.5s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-feed-item,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-event-line {
+  transition:
+    transform 0.4s var(--vng-premium-ease),
+    opacity 0.4s var(--vng-premium-ease),
+    background-color 0.35s var(--vng-premium-ease) !important;
+}
+
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-feed-item:hover,
+.vng-room-shell[data-vng-theme-variant="premium"] .vng-event-line:hover {
+  transform: translateX(4px);
+  background: color-mix(in srgb, var(--vng-dos-accent) 6%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vng-room-shell[data-vng-theme-variant="premium"] {
+    animation: none !important;
+  }
+
+  .vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-canvas {
+    display: none;
+  }
+
+  .vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-char,
+  .vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-reveal,
+  .vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-magnetic,
+  .vng-room-shell[data-vng-theme-variant="premium"] .vng-premium-hoverable {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  .vng-room-shell[data-vng-theme-variant="premium"] * {
+    transition-duration: 0.01ms !important;
   }
 }

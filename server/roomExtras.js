@@ -85,6 +85,7 @@ export function sanitizeTheme(theme) {
     blue: hex(theme?.blue, DEFAULT_THEME.blue),
     gold: hex(theme?.gold, DEFAULT_THEME.gold),
     bg: hex(theme?.bg, DEFAULT_THEME.bg),
+    variant: theme?.variant === 'premium' ? 'premium' : 'default',
   }
 }
 

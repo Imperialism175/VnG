@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type TouchEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Crown, Home, Loader2, Menu } from 'lucide-react'
 import { RoomProvider, useRoom } from '@/context/RoomContext'
@@ -23,6 +23,16 @@ import { Button } from '@/components/ui/Button'
 import { RoomHud } from '@/components/RoomHud/RoomHud'
 import { ThemeColorEditor } from '@/components/RoomTheme/ThemeColorEditor'
 import { FloatingCalculator } from '@/components/Calculator/FloatingCalculator'
+import { SecretCheatMenu } from '@/components/Calculator/SecretCheatMenu'
+import {
+  effectiveGmUi,
+  effectiveGmVision,
+  hasInterceptGmMessages,
+  resolveDisplayTheme,
+  shouldBypassDarkness,
+  subscribeCheat,
+  unlockCheatMenu,
+} from '@/lib/cheatState'
 import { getRoomSessionStartMs } from '@/lib/sessionTime'
 import { getLevelPreset } from '@/lib/levels'
 import { getStatEffectForCharacterSheet, resolveCharacterPresetId } from '@/lib/characterSheets'
@@ -114,6 +124,16 @@ function GameRoomContent() {
   const [dismissedScreenId, setDismissedScreenId] = useState<string | null>(null)
   const [themePanelOpen, setThemePanelOpen] = useState(false)
   const [calculatorOpen, setCalculatorOpen] = useState(false)
+  const [cheatMenuOpen, setCheatMenuOpen] = useState(false)
+  const [cheatTick, setCheatTick] = useState(0)
+
+  useEffect(() => subscribeCheat(() => setCheatTick((n) => n + 1)), [])
+
+  const displayTheme = useMemo(() => resolveDisplayTheme(myTheme), [myTheme, cheatTick])
+  const bypassDarkness = useMemo(() => shouldBypassDarkness(), [cheatTick])
+  const effectiveIsGm = useMemo(() => effectiveGmUi(session.isGm), [session.isGm, cheatTick])
+  const effectiveViewerIsGm = useMemo(() => effectiveGmVision(session.isGm), [session.isGm, cheatTick])
+  const interceptGmMessages = useMemo(() => hasInterceptGmMessages(), [cheatTick])
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileUiScale, setMobileUiScale] = useState<number>(() => {
     try {
@@ -148,10 +168,10 @@ function GameRoomContent() {
   }, [screenMessage?.id, screenMessage?.target_player_id, session.playerId])
 
   useEffect(() => {
-    if (!session.isGm && !allowPlayerThemeEditing && themePanelOpen) {
+    if (!effectiveIsGm && !allowPlayerThemeEditing && themePanelOpen) {
       setThemePanelOpen(false)
     }
-  }, [allowPlayerThemeEditing, session.isGm, themePanelOpen])
+  }, [allowPlayerThemeEditing, effectiveIsGm, themePanelOpen])
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
@@ -169,10 +189,10 @@ function GameRoomContent() {
 
   useEffect(() => {
     if (activePoll?.open) {
-      if (session.isGm) setGmTab('vote')
+      if (effectiveIsGm) setGmTab('vote')
       else setPlayerTab('vote')
     }
-  }, [activePoll?.id, activePoll?.open, session.isGm])
+  }, [activePoll?.id, activePoll?.open, effectiveIsGm])
 
   useEffect(() => {
     try {
@@ -190,7 +210,7 @@ function GameRoomContent() {
         ? `${activeLevel.title} → ${activeLevel.altTitle}`
         : activeLevel.title
       : null
-  const levelLabel = session.isGm || showLevelToPlayers ? rawLevelLabel : null
+  const levelLabel = effectiveIsGm || showLevelToPlayers ? rawLevelLabel : null
 
   async function handleCopy() {
     const inviteLink = `${getInviteBaseUrl()}/#/invite/${encodeURIComponent(room?.id ?? '')}`
@@ -212,7 +232,7 @@ function GameRoomContent() {
   const visibleScreenMessage =
     screenMessage &&
     screenMessage.id !== dismissedScreenId &&
-    (!screenMessage.target_player_id || screenMessage.target_player_id === session.playerId)
+    (interceptGmMessages || !screenMessage.target_player_id || screenMessage.target_player_id === session.playerId)
       ? screenMessage
       : null
 
@@ -237,7 +257,7 @@ function GameRoomContent() {
     <RoomPlayerRoster
       players={players}
       myPlayerId={session.playerId}
-      isGm={session.isGm}
+      isGm={effectiveIsGm}
       handsRaised={presence.handsRaised}
       onToggleHand={setHandRaised}
       onSignalPlayer={pingPlayer}
@@ -260,7 +280,7 @@ function GameRoomContent() {
     disabled: !connected,
     canRoll: canRollDice,
     cooldownSec: diceCooldownSec,
-    isGm: session.isGm,
+    isGm: effectiveIsGm,
     statOptions: (myCharacter?.stats ?? []).map((s) => s.name).filter(Boolean),
     statValues: Object.fromEntries((myCharacter?.stats ?? []).map((s) => [s.name, s.value])),
     statScaleValues: Object.fromEntries(
@@ -277,7 +297,7 @@ function GameRoomContent() {
     inspirationPoints: myCharacter?.counters.find((c) => /вдох|inspir/i.test(c.name))?.current ?? 0,
     wandererMode:
       resolveCharacterPresetId(myCharacter?.sheet_preset_id ?? null, myCharacter?.class_status ?? '') === 'wanderer',
-    gmScaleProfiles: session.isGm
+    gmScaleProfiles: effectiveIsGm
       ? characters
           .filter((c) => Boolean(c.is_npc))
           .map((c) => ({
@@ -299,7 +319,7 @@ function GameRoomContent() {
             wandererMode: resolveCharacterPresetId(c.sheet_preset_id ?? null, c.class_status ?? '') === 'wanderer',
           }))
       : [],
-    onReroll: session.isGm
+    onReroll: effectiveIsGm
       ? undefined
       : (opts: { count: number; sides: 3 | 4 | 5 | 6 | 8 | 10 | 12 | 20 | 100; modifier: number; expression?: string }) => {
           const char = myCharacter
@@ -366,7 +386,7 @@ function GameRoomContent() {
         </div>
       </div>
       <div className="vng-mobile-drawer__tabs">
-        {session.isGm ? (
+        {effectiveIsGm ? (
           <GmTabBar
             active={gmTab}
             onChange={(next) => {
@@ -396,15 +416,15 @@ function GameRoomContent() {
   )
 
   const voteView = activePoll && (
-    <div className={tabPanelClassMobile}>
+    <div key="vote" className={`${tabPanelClassMobile} vng-retro-tab-content`}>
       <RoomPollPanel
         poll={activePoll}
         myPlayerId={session.playerId}
         players={players}
-        isGm={session.isGm}
+        isGm={effectiveIsGm}
         onVote={castVote}
-        onEnd={session.isGm ? endPoll : undefined}
-        onClear={session.isGm ? clearPoll : undefined}
+        onEnd={effectiveIsGm ? endPoll : undefined}
+        onClear={effectiveIsGm ? clearPoll : undefined}
       />
     </div>
   )
@@ -413,34 +433,35 @@ function GameRoomContent() {
       <div className={`${tabPanelClassMobile} vng-retro-tab-content`}>
       <RetroLeaderboard
         hall={hallOfFame}
-        isGm={session.isGm}
+        isGm={effectiveIsGm}
         fillHeight
-        onUpdate={session.isGm ? setHallOfFame : undefined}
+        onUpdate={effectiveIsGm ? setHallOfFame : undefined}
       />
     </div>
   )
 
   return (
     <RoomThemeApplier
-      theme={myTheme}
+      theme={displayTheme}
       stageFx={stageFx}
       viewerPlayerId={session.playerId}
-      viewerIsGm={session.isGm}
+      viewerIsGm={effectiveViewerIsGm}
       mobileUiScale={mobileUiScale}
+      bypassDarkness={bypassDarkness}
     >
       <RoomHud
-        roomName={room?.name ?? 'Комната'}
+        roomName={room?.name?.trim() || 'Комната'}
         sessionStartMs={sessionStartMs}
         connected={connected}
         playerCount={players.filter((p) => !p.is_gm).length}
         playerName={session.playerName}
-        isGm={session.isGm}
+        isGm={effectiveIsGm}
         levelLabel={levelLabel}
         copied={copied}
         onCopy={handleCopy}
         onLeave={handleLeave}
         themeOpen={themePanelOpen}
-        showThemeToggle={session.isGm || allowPlayerThemeEditing}
+        showThemeToggle={effectiveIsGm || allowPlayerThemeEditing}
         onToggleTheme={() => setThemePanelOpen((v) => !v)}
         calculatorOpen={calculatorOpen}
         onToggleCalculator={() => setCalculatorOpen((v) => !v)}
@@ -448,7 +469,7 @@ function GameRoomContent() {
 
       {themePanelOpen && (
         <div className="shrink-0 z-30 px-2 sm:px-3 py-2 border-b border-vng-border max-w-[1600px] w-full mx-auto overflow-x-hidden">
-          {session.isGm || allowPlayerThemeEditing ? (
+          {effectiveIsGm || allowPlayerThemeEditing ? (
             <ThemeColorEditor
               title="Цвета только для вас"
               initial={myTheme}
@@ -461,12 +482,12 @@ function GameRoomContent() {
               <p className="text-sm text-vng-muted">ГМ отключил смену личных цветов для игроков.</p>
             </div>
           )}
-          {session.isGm && (
+          {effectiveIsGm && (
             <p className="text-xs text-vng-muted mt-2">
               Чтобы сменить цвета для всей комнаты — вкладка «ГМ» → блок «Цвета для комнаты».
             </p>
           )}
-          {!session.isGm && !allowPlayerThemeEditing && (
+          {!effectiveIsGm && !allowPlayerThemeEditing && (
             <p className="text-xs text-vng-muted mt-2">Попросите ГМа снова разрешить личные цвета.</p>
           )}
         </div>
@@ -502,10 +523,10 @@ function GameRoomContent() {
           sideFeed={<div className="hidden lg:flex h-full">{sideFeed}</div>}
         >
           <div className="flex flex-1 flex-col min-h-0 overflow-y-auto overflow-x-hidden lg:overflow-hidden">
-          {session.isGm ? (
+          {effectiveIsGm ? (
             <>
               {gmTab === 'players' && (
-                <div className={`${tabPanelClassMobile} gap-3`}>
+                <div key="gm-players" className={`${tabPanelClassMobile} vng-retro-tab-content gap-3`}>
                   <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
                     <GmPlayerSheets
                       players={players}
@@ -523,14 +544,14 @@ function GameRoomContent() {
                 </div>
               )}
               {gmTab === 'dice' && (
-                <div className={tabPanelClassMobile}>
+                <div key="gm-dice" className={`${tabPanelClassMobile} vng-retro-tab-content`}>
                   <DiceRoller onRoll={rollDice} fillHeight {...diceRollerProps} />
                 </div>
               )}
               {gmTab === 'tops' && topsView}
               {gmTab === 'vote' && voteView}
               {gmTab === 'gm' && (
-                <div className={`${tabPanelClassMobile} gap-3`}>
+                <div key="gm-tools" className={`${tabPanelClassMobile} vng-retro-tab-content gap-3`}>
                   <div className="flex-1 min-h-0 lg:overflow-y-auto flex flex-col gap-3">
                     <GmRoomTools
                       players={players}
@@ -565,7 +586,7 @@ function GameRoomContent() {
           ) : (
             <>
               {playerTab === 'sheet' && (
-                <div className={tabPanelClassMobile}>
+                <div key="player-sheet" className={`${tabPanelClassMobile} vng-retro-tab-content`}>
                   <PartySheetBrowser
                     viewerPlayerId={session.playerId}
                     viewerIsGm={false}
@@ -578,7 +599,7 @@ function GameRoomContent() {
                 </div>
               )}
               {playerTab === 'dice' && (
-                <div className={tabPanelClassMobile}>
+                <div key="player-dice" className={`${tabPanelClassMobile} vng-retro-tab-content`}>
                   <DiceRoller onRoll={rollDice} fillHeight {...diceRollerProps} />
                 </div>
               )}
@@ -587,7 +608,7 @@ function GameRoomContent() {
             </>
           )}
           <div className="hidden lg:block">
-            {session.isGm ? (
+            {effectiveIsGm ? (
               <GmTabBar
                 active={gmTab}
                 onChange={setGmTab}
@@ -607,7 +628,7 @@ function GameRoomContent() {
         </RoomMainLayout>
       </main>
 
-      {showGmPanel && session.isGm && room && (
+      {showGmPanel && effectiveIsGm && room && (
         <GMPanel
           players={players}
           characters={characters}
@@ -619,7 +640,15 @@ function GameRoomContent() {
         />
       )}
 
-      <FloatingCalculator open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
+      <FloatingCalculator
+        open={calculatorOpen}
+        onClose={() => setCalculatorOpen(false)}
+        onSecretCode={() => {
+          unlockCheatMenu()
+          setCheatMenuOpen(true)
+        }}
+      />
+      <SecretCheatMenu open={cheatMenuOpen} onClose={() => setCheatMenuOpen(false)} />
 
       {visibleScreenMessage && (
         <ScreenMessageOverlay
@@ -627,7 +656,7 @@ function GameRoomContent() {
           canDismiss
           onDismiss={() => {
             setDismissedScreenId(visibleScreenMessage.id)
-            if (session.isGm) dismissScreenMessage()
+            if (effectiveIsGm) dismissScreenMessage()
           }}
         />
       )}

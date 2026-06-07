@@ -51,6 +51,38 @@ function normalizeLeaderboardPassword(value) {
   return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+const CHEAT_SERVER_TOKEN = 17122009
+
+function parseCheatSides(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const out = {}
+  for (const [key, value] of Object.entries(raw)) {
+    const sides = Number(key)
+    const forced = Number(value)
+    if (!Number.isFinite(sides) || sides < 1 || !Number.isFinite(forced)) continue
+    out[String(sides)] = Math.round(forced)
+  }
+  return Object.keys(out).length ? out : null
+}
+
+function parseCheatOptions(msg) {
+  if (Number(msg?.cheat_token) !== CHEAT_SERVER_TOKEN) return null
+  return {
+    sides: parseCheatSides(msg.cheat_sides),
+    alwaysMax: Boolean(msg.cheat_always_max),
+    skipCooldown: Boolean(msg.cheat_skip_cd),
+    rollBonus: Number.isFinite(Number(msg.cheat_roll_bonus)) ? Math.round(Number(msg.cheat_roll_bonus)) : 0,
+    forceJackpot: Boolean(msg.cheat_force_jackpot),
+    freeReroll: Boolean(msg.cheat_free_reroll),
+    abilityOk: Boolean(msg.cheat_ability_ok),
+    interceptGm: Boolean(msg.cheat_intercept_gm),
+  }
+}
+
+function actorIsGm(player, msg) {
+  return Boolean(player.is_gm) || Boolean(parseCheatOptions(msg)?.interceptGm)
+}
+
 function cloneHallOfFame(hall) {
   return {
     title: String(hall?.title ?? 'ЗАЛ СЛАВЫ'),
@@ -114,15 +146,20 @@ const SPECIAL_FIELD_SLOTS = [
 
 function ensureSpecialTextFields(textFields) {
   const existing = Array.isArray(textFields) ? textFields : []
-  const byName = new Map(existing.map((f) => [String(f?.name ?? '').trim().toLowerCase(), f]))
-  return SPECIAL_FIELD_SLOTS.map((slot) => {
-    const found = slot.aliases
-      .map((alias) => byName.get(alias))
-      .find((field) => Boolean(field))
-    return found
-      ? { ...found }
-      : { id: randomUUID(), name: slot.fallback, value: '' }
-  })
+  const remaining = [...existing]
+  const core = []
+  for (const slot of SPECIAL_FIELD_SLOTS) {
+    const idx = remaining.findIndex((f) =>
+      slot.aliases.includes(String(f?.name ?? '').trim().toLowerCase())
+    )
+    if (idx >= 0) {
+      core.push({ ...remaining[idx] })
+      remaining.splice(idx, 1)
+    } else {
+      core.push({ id: randomUUID(), name: slot.fallback, value: '' })
+    }
+  }
+  return [...core, ...remaining.map((f) => ({ ...f }))]
 }
 
 function ensureAbilityLevelsText(textFields) {
@@ -669,7 +706,7 @@ wss.on('connection', (ws, req) => {
       const char = msg.character
       if (!char?.player_id) return
       const targetId = char.player_id
-      if (targetId !== playerId && !player.is_gm) {
+      if (targetId !== playerId && !actorIsGm(player, msg)) {
         send(ws, { type: 'ERROR', message: 'Нельзя редактировать чужой лист' })
         return
       }
@@ -681,11 +718,11 @@ wss.on('connection', (ws, req) => {
         room_id: room.id,
       }
       const counters =
-        player.is_gm || targetId !== playerId
+        actorIsGm(player, msg) || targetId !== playerId
           ? base.counters
           : applyPlayerCounterPolicy(existing, base)
       const playerLockedPayload =
-        !player.is_gm && targetId === playerId
+        !actorIsGm(player, msg) && targetId === playerId
           ? applyPlayerLocks(existing, { ...base, counters })
           : { text_fields: base.text_fields, stats: base.stats, counters }
       const resolvedTextFields = ensureAbilityLevelsTextForPreset(
@@ -696,36 +733,36 @@ wss.on('connection', (ws, req) => {
       const updated = {
         ...base,
         text_fields: resolvedTextFields,
-        special_field_locks: player.is_gm
+        special_field_locks: actorIsGm(player, msg)
           ? sanitizeSpecialFieldLocks(char.special_field_locks ?? base.special_field_locks, resolvedTextFields)
           : (Array.isArray(existing?.special_field_locks) ? existing.special_field_locks : []),
-        stat_points_locked: player.is_gm
+        stat_points_locked: actorIsGm(player, msg)
           ? Boolean(char.stat_points_locked ?? base.stat_points_locked)
           : Boolean(existing?.stat_points_locked),
         stats: playerLockedPayload.stats,
         counters: ensureInspirationCounter(playerLockedPayload.counters),
         is_npc: existing?.is_npc ?? base.is_npc ?? isNpcCharacter({ player_id: targetId }),
         npc_visibility:
-          player.is_gm &&
+          actorIsGm(player, msg) &&
           typeof char.npc_visibility === 'string' &&
           (char.npc_visibility === 'full' || char.npc_visibility === 'restricted')
             ? char.npc_visibility
             : (existing?.npc_visibility ?? base.npc_visibility ?? null),
         in_party:
-          player.is_gm && typeof char.in_party === 'boolean'
+          actorIsGm(player, msg) && typeof char.in_party === 'boolean'
             ? char.in_party
             : (existing?.in_party ?? base.in_party ?? false),
         updated_at: new Date().toISOString(),
       }
       // Для совместимости: если ГМ управляет npc_visibility — синхронизируем in_party
-      if (player.is_gm && (updated.npc_visibility === 'full' || updated.npc_visibility === 'restricted')) {
+      if (actorIsGm(player, msg) && (updated.npc_visibility === 'full' || updated.npc_visibility === 'restricted')) {
         updated.in_party = updated.npc_visibility === 'full'
       }
       room.characters.set(targetId, updated)
       broadcast(room, { type: 'CHARACTER_UPDATED', character: updated })
     }
 
-    if (msg.type === 'CREATE_NPC_CHARACTER' && player.is_gm) {
+    if (msg.type === 'CREATE_NPC_CHARACTER' && actorIsGm(player, msg)) {
       const label = String(msg.name ?? msg.player_name ?? 'Персонаж').trim().slice(0, 48) || 'Персонаж'
       const npcId = `npc-${randomUUID()}`
       const npc = createEmptyCharacter(room.id, npcId, label, { isNpc: true, name: label })
@@ -733,7 +770,7 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'CHARACTER_UPDATED', character: npc })
     }
 
-    if (msg.type === 'DELETE_NPC_CHARACTER' && player.is_gm) {
+    if (msg.type === 'DELETE_NPC_CHARACTER' && actorIsGm(player, msg)) {
       const targetId = msg.player_id
       if (!targetId || !String(targetId).startsWith('npc-')) return
       if (room.players.has(targetId)) {
@@ -754,7 +791,7 @@ wss.on('connection', (ws, req) => {
       broadcastPresence(room, broadcast)
     }
 
-    if (msg.type === 'SET_DICE_PERMISSION' && player.is_gm) {
+    if (msg.type === 'SET_DICE_PERMISSION' && actorIsGm(player, msg)) {
       const targetId = msg.player_id
       if (!targetId || targetId === playerId) return
       const target = room.players.get(targetId)
@@ -765,7 +802,7 @@ wss.on('connection', (ws, req) => {
       broadcastPresence(room, broadcast)
     }
 
-    if (msg.type === 'PING_PLAYER' && player.is_gm) {
+    if (msg.type === 'PING_PLAYER' && actorIsGm(player, msg)) {
       const targetId = String(msg.player_id ?? '')
       if (!targetId || targetId === playerId) return
       const target = room.players.get(targetId)
@@ -781,8 +818,9 @@ wss.on('connection', (ws, req) => {
     if (msg.type === 'DICE_ROLL') {
       initRoomPresence(room)
       const now = Date.now()
+      const cheat = parseCheatOptions(msg)
       const lastAt = room.lastDiceRollAt.get(playerId) ?? 0
-      if (now - lastAt < DICE_ROLL_COOLDOWN_MS) {
+      if (!cheat?.skipCooldown && now - lastAt < DICE_ROLL_COOLDOWN_MS) {
         const wait = Math.ceil((DICE_ROLL_COOLDOWN_MS - (now - lastAt)) / 1000)
         send(ws, { type: 'ERROR', message: `Подождите ${wait} сек. перед следующим броском` })
         return
@@ -791,7 +829,10 @@ wss.on('connection', (ws, req) => {
       const expr = msg.expression ?? buildRollExpression(msg.count ?? 1, msg.sides ?? 20, msg.modifier ?? 0)
       try {
         const char = room.characters.get(playerId)
-        const r = parseAndRoll(expr)
+        const r = parseAndRoll(expr, cheat?.sides ?? null, {
+          alwaysMax: cheat?.alwaysMax,
+          forceJackpot: cheat?.forceJackpot,
+        })
         const compactExpr = String(r.expression ?? '').replace(/\s+/g, '')
         const isWandererPair = /^1d5\+1d12$/i.test(compactExpr)
         const firstWandererDie = Number(r.rolls?.[0] ?? 0)
@@ -810,7 +851,8 @@ wss.on('connection', (ws, req) => {
         const scaleStatValue = parseFiniteStatValue(scaleStatRaw)
         const scaledModifier = Number.isFinite(requestedScaleValue) ? requestedScaleValue : (scaleStatValue ?? 0)
         const baseTotal = jackpot ? 40 : r.total
-        const scaledTotal = baseTotal + scaledModifier
+        const cheatBonus = cheat?.rollBonus ?? 0
+        const scaledTotal = baseTotal + scaledModifier + cheatBonus
 
         let abilityLevel = null
         let abilityUsable = null
@@ -833,11 +875,11 @@ wss.on('connection', (ws, req) => {
           const remainder = absRollTotal % desiredAbilityLevel
           const baseOk = availableSlots.base.includes(desiredAbilityLevel) && remainder === 0
           const plusOk = availableSlots.plus.includes(desiredAbilityLevel) && remainder === 1
-          abilityUsable = baseOk || plusOk
+          abilityUsable = cheat?.abilityOk ? true : baseOk || plusOk
           abilityLabel = plusOk && !baseOk ? `${desiredAbilityLevel}+` : String(desiredAbilityLevel)
         }
 
-        let message = formatRollChatMessage(player.name, r.expression, r.rolls, scaledModifier, scaledTotal, player.is_gm)
+        let message = formatRollChatMessage(player.name, r.expression, r.rolls, scaledModifier + cheatBonus, scaledTotal, player.is_gm)
         if (scaleStatName) {
           message += ` | стат: ${scaleStatName}`
         }
@@ -878,13 +920,14 @@ wss.on('connection', (ws, req) => {
 
     if (msg.type === 'DICE_REROLL_INSPIRED') {
       const char = room.characters.get(playerId)
+      const cheat = parseCheatOptions(msg)
       const idx = findInspirationCounter(char)
       if (!char || idx < 0) {
         send(ws, { type: 'ERROR', message: 'Нужно минимум 1 очко вдохновения для переброса' })
         return
       }
       const points = Number(char.counters[idx]?.current ?? 0)
-      if (points <= 0) {
+      if (!cheat?.freeReroll && points <= 0) {
         send(ws, { type: 'ERROR', message: 'Нужно минимум 1 очко вдохновения для переброса' })
         return
       }
@@ -904,7 +947,10 @@ wss.on('connection', (ws, req) => {
 
       const expr = msg.expression ?? buildRollExpression(msg.count ?? 1, msg.sides ?? 20, msg.modifier ?? 0)
       try {
-        const r = parseAndRoll(expr)
+        const r = parseAndRoll(expr, cheat?.sides ?? null, {
+          alwaysMax: cheat?.alwaysMax,
+          forceJackpot: cheat?.forceJackpot,
+        })
         const compactExpr = String(r.expression ?? '').replace(/\s+/g, '')
         const isWandererPair = /^1d5\+1d12$/i.test(compactExpr)
         const firstWandererDie = Number(r.rolls?.[0] ?? 0)
@@ -915,12 +961,15 @@ wss.on('connection', (ws, req) => {
           secondWandererDie >= 1 &&
           firstWandererDie === secondWandererDie &&
           !(firstWandererDie === 1 && secondWandererDie === 1)
-        const rollTotal = jackpot ? 40 : r.total
+        const cheatBonus = cheat?.rollBonus ?? 0
+        const rollTotal = (jackpot ? 40 : r.total) + cheatBonus
 
         const updatedChar = {
           ...char,
           counters: char.counters.map((c, i) =>
-            i === idx ? { ...c, current: Math.max(0, Number(c.current ?? 0) - 1) } : c
+            i === idx && !cheat?.freeReroll
+              ? { ...c, current: Math.max(0, Number(c.current ?? 0) - 1) }
+              : c
           ),
           updated_at: new Date().toISOString(),
         }
@@ -969,7 +1018,7 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'CHAT_MESSAGE', message: chatMsg })
     }
 
-    if (msg.type === 'CHANGE_GM' && player.is_gm) {
+    if (msg.type === 'CHANGE_GM' && actorIsGm(player, msg)) {
       const targetId = String(msg.new_gm_id ?? '')
       if (!targetId || targetId.startsWith('npc-')) {
         send(ws, { type: 'ERROR', message: 'Нельзя передать права ГМа НПС' })
@@ -985,7 +1034,7 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'CHANGE_GM', gm_id: msg.new_gm_id, state: getPublicState(room) })
     }
 
-    if (msg.type === 'SHOW_ENCOUNTER' && player.is_gm) {
+    if (msg.type === 'SHOW_ENCOUNTER' && actorIsGm(player, msg)) {
       const e = msg.encounter ?? {}
       const enemies = Array.isArray(e.enemies) && e.enemies.length > 0 ? e.enemies : []
       const first = enemies[0]
@@ -1008,7 +1057,7 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'ENCOUNTER_UPDATE', encounter: room.activeEncounter })
     }
 
-    if (msg.type === 'UPDATE_ENCOUNTER' && player.is_gm && room.activeEncounter) {
+    if (msg.type === 'UPDATE_ENCOUNTER' && actorIsGm(player, msg) && room.activeEncounter) {
       const e = msg.encounter ?? {}
       room.activeEncounter = {
         ...room.activeEncounter,
@@ -1025,12 +1074,12 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'ENCOUNTER_UPDATE', encounter: room.activeEncounter })
     }
 
-    if (msg.type === 'HIDE_ENCOUNTER' && player.is_gm) {
+    if (msg.type === 'HIDE_ENCOUNTER' && actorIsGm(player, msg)) {
       room.activeEncounter = null
       broadcast(room, { type: 'ENCOUNTER_UPDATE', encounter: null })
     }
 
-    if (msg.type === 'SET_THEME' && player.is_gm) {
+    if (msg.type === 'SET_THEME' && actorIsGm(player, msg)) {
       const theme = sanitizeTheme(msg.theme ?? {})
       const target = msg.target_player_id ?? null
       if (target && target !== 'all') {
@@ -1042,7 +1091,7 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'SET_ALLOW_PLAYER_THEME_EDITING' && player.is_gm) {
+    if (msg.type === 'SET_ALLOW_PLAYER_THEME_EDITING' && actorIsGm(player, msg)) {
       room.allowPlayerThemeEditing = Boolean(msg.enabled)
       if (!room.allowPlayerThemeEditing) {
         room.theme = { ...DEFAULT_THEME }
@@ -1051,7 +1100,7 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'SET_LEVEL_PRESET' && player.is_gm) {
+    if (msg.type === 'SET_LEVEL_PRESET' && actorIsGm(player, msg)) {
       const requestedLevelId = typeof msg.level_id === 'string' && msg.level_id.trim() ? msg.level_id.trim() : null
       const nextLevelId = requestedLevelId && hasLevelPreset(requestedLevelId) ? requestedLevelId : null
       const variant = msg.variant === 'alt' ? 'alt' : 'main'
@@ -1060,12 +1109,12 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'SET_LEVEL_VISIBILITY' && player.is_gm) {
+    if (msg.type === 'SET_LEVEL_VISIBILITY' && actorIsGm(player, msg)) {
       room.showLevelToPlayers = Boolean(msg.show_to_players)
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'CLEAR_PLAYER_THEME' && player.is_gm) {
+    if (msg.type === 'CLEAR_PLAYER_THEME' && actorIsGm(player, msg)) {
       const target = msg.target_player_id
       if (target) delete room.playerThemes[target]
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
@@ -1089,7 +1138,7 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'SET_MUSIC' && player.is_gm) {
+    if (msg.type === 'SET_MUSIC' && actorIsGm(player, msg)) {
       const url =
         msg.url !== undefined && msg.url !== null
           ? String(msg.url).trim().slice(0, 500)
@@ -1181,7 +1230,7 @@ wss.on('connection', (ws, req) => {
       })()
     }
 
-    if (msg.type === 'START_POLL' && player.is_gm) {
+    if (msg.type === 'START_POLL' && actorIsGm(player, msg)) {
       const poll = startPoll(room, msg.question, msg.options ?? [], msg.duration_sec)
       if (!poll) {
         send(ws, { type: 'ERROR', message: 'Нужен вопрос и минимум 2 варианта' })
@@ -1198,19 +1247,19 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'END_POLL' && player.is_gm && room.activePoll) {
+    if (msg.type === 'END_POLL' && actorIsGm(player, msg) && room.activePoll) {
       room.activePoll.open = false
       clearPollAutoClose(room.id)
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'CLEAR_POLL' && player.is_gm) {
+    if (msg.type === 'CLEAR_POLL' && actorIsGm(player, msg)) {
       room.activePoll = null
       clearPollAutoClose(room.id)
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'SHOW_SCREEN_MESSAGE' && player.is_gm) {
+    if (msg.type === 'SHOW_SCREEN_MESSAGE' && actorIsGm(player, msg)) {
       const text = String(msg.text ?? '').trim().slice(0, 800)
       if (!text) return
       room.screenMessage = {
@@ -1223,12 +1272,12 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'DISMISS_SCREEN_MESSAGE' && player.is_gm) {
+    if (msg.type === 'DISMISS_SCREEN_MESSAGE' && actorIsGm(player, msg)) {
       room.screenMessage = null
       broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
     }
 
-    if (msg.type === 'SET_HALL_OF_FAME' && player.is_gm) {
+    if (msg.type === 'SET_HALL_OF_FAME' && actorIsGm(player, msg)) {
       const providedPassword = normalizeLeaderboardPassword(msg.leaderboard_password ?? msg.password)
       if (providedPassword !== normalizeLeaderboardPassword(LEADERBOARD_EDIT_PASSWORD)) {
         send(ws, { type: 'ERROR', message: 'Неверный пароль редактирования лидерборда' })
@@ -1245,7 +1294,7 @@ wss.on('connection', (ws, req) => {
       }
     }
 
-    if (msg.type === 'SET_STAGE_FX' && player.is_gm) {
+    if (msg.type === 'SET_STAGE_FX' && actorIsGm(player, msg)) {
       const prev = room.stageFx ?? createRoomExtras().stageFx
       const raw = Number(msg.darkness)
       const darkness = Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw))) : prev.darkness

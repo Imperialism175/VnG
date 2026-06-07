@@ -1,4 +1,5 @@
 import type { Character, Player } from '@/types'
+import { isCheatSeeAllSheets } from '@/lib/cheatState'
 import { isNpcPlayerId } from '@/lib/rollFeed'
 
 export type SheetVisibility = 'full' | 'restricted'
@@ -22,7 +23,7 @@ export function getSheetVisibility(
   players: Player[],
   gmPlayerId: string
 ): SheetVisibility {
-  if (viewerIsGm) return 'full'
+  if (viewerIsGm || isCheatSeeAllSheets()) return 'full'
   if (target.player_id === viewerPlayerId) return 'full'
 
   const linked = players.find((p) => p.id === target.player_id)

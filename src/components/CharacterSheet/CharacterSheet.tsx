@@ -10,6 +10,7 @@ import {
   applySheetPreset,
   getStatEffectForCharacterSheet,
   getThresholdEffectsForCharacter,
+  isCoreSpecialField,
   isSkillPointCounter,
   isResearcherSheet,
   SKILL_POINTS_COUNTER_NAME,
@@ -501,6 +502,26 @@ function toCounters(src: unknown): CounterField[] {
   })
 }
 
+function syncHpCounterFromImportedStats(character: Character): Character {
+  const isDaredevil = resolveCharacterPresetId(character.sheet_preset_id ?? null, character.class_status) === 'daredevil'
+  if (isDaredevil) return character
+
+  const hpStat = character.stats.find((s) => isHpStat(s.name))
+  const hpIdx = character.counters.findIndex((c) => isHealthCounter(c.name))
+  if (!hpStat || hpIdx < 0) return character
+
+  const spent = Math.max(0, Math.round(Number(hpStat.value) || 0))
+  const hpMax = getHpCounterMaxFromHpStat(
+    spent,
+    character.sheet_preset_id ?? null,
+    character.class_status
+  )
+  const counters = character.counters.map((c, i) =>
+    i === hpIdx ? { ...c, max: hpMax, current: hpMax } : c
+  )
+  return { ...character, counters }
+}
+
 function buildCharacterFromImportedJson(raw: unknown, base: Character): Character | null {
   const root = (raw ?? {}) as Record<string, unknown>
   const fromWrapped =
@@ -637,13 +658,10 @@ export function CharacterSheet({
         window.alert('Не удалось прочитать листик. Проверьте формат файла.')
         return
       }
-      if (!gmEditing) {
-        imported.stats = local.stats
-        imported.counters = local.counters
-        imported.stat_points_locked = local.stat_points_locked
-        imported.sheet_preset_locked = local.sheet_preset_locked
-      }
-      scheduleSave(imported)
+      imported.stat_points_locked = local.stat_points_locked
+      imported.sheet_preset_locked = local.sheet_preset_locked
+      imported.special_field_locks = local.special_field_locks ?? imported.special_field_locks ?? []
+      scheduleSave(syncHpCounterFromImportedStats(imported))
     } catch {
       window.alert('Ошибка загрузки листика. Неверный/чужой зашифрованный файл или повреждённый JSON.')
     } finally {
@@ -719,9 +737,7 @@ export function CharacterSheet({
         finalStats = finalStats.map((s) => (s.id === id ? { ...s, value: String(normalizedSpent) } : s))
         if (hpIdx >= 0) {
           finalCounters = finalCounters.map((c, i) =>
-            i === hpIdx
-              ? { ...c, max: hpMax, current: Math.min(c.current, hpMax) }
-              : c
+            i === hpIdx ? { ...c, max: hpMax, current: hpMax } : c
           )
         }
       }
@@ -854,7 +870,7 @@ export function CharacterSheet({
         nextStats,
         local.counters.map((c, i) => {
           if (i === pointsIdx) return { ...c, current: Math.max(0, c.current - delta) }
-          if (i === hpIdx) return { ...c, max: nextHpMax, current: Math.min(c.current, nextHpMax) }
+          if (i === hpIdx) return { ...c, max: nextHpMax, current: nextHpMax }
           return c
         }),
         local.sheet_preset_id ?? null,
@@ -951,6 +967,26 @@ export function CharacterSheet({
     scheduleSave({
       ...local,
       special_field_locks: [...next],
+    })
+  }
+
+  function addSpecialField() {
+    if (!gmEditing) return
+    const field: TextField = { id: generateId(), name: 'Особое поле', value: '' }
+    scheduleSave({
+      ...local,
+      text_fields: [...(local.text_fields ?? []), field],
+    })
+  }
+
+  function removeSpecialField(fieldId: string) {
+    if (!gmEditing) return
+    const field = (local.text_fields ?? []).find((f) => f.id === fieldId)
+    if (!field || isCoreSpecialField(field)) return
+    scheduleSave({
+      ...local,
+      text_fields: (local.text_fields ?? []).filter((f) => f.id !== fieldId),
+      special_field_locks: (local.special_field_locks ?? []).filter((id) => id !== fieldId),
     })
   }
 
@@ -1169,18 +1205,27 @@ export function CharacterSheet({
         {/* Custom text blocks — особые поля листа */}
         {templateSelected && !restrictedView && (
         <section>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2 gap-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-vng-muted">
               Особые поля
             </h3>
+            {gmEditing && (
+              <Button variant="ghost" size="sm" type="button" onClick={addSpecialField}>
+                <PlusCircle size={14} /> Добавить поле
+              </Button>
+            )}
           </div>
           <p className="text-xs text-vng-muted mb-3">
-            Набор особых полей фиксирован правилами листика. Можно менять только содержимое.
+            {gmEditing
+              ? 'Базовые поля листика + свои дополнительные. Замок скрывает редактирование у игрока.'
+              : 'Можно менять содержимое открытых полей. Названия базовых полей заданы шаблоном.'}
           </p>
           <div className="flex flex-col gap-3">
             {textFields.map((field) => {
               const fieldLocked = specialFieldLocks.has(field.id)
+              const coreField = isCoreSpecialField(field)
               const fieldReadOnly = !canEdit || (!gmEditing && fieldLocked)
+              const canRenameField = gmEditing || (!coreField && canEdit && !fieldLocked)
               const fieldMaxLen = getTextFieldMaxLength(resolvedPresetId, field.name)
               return (
                 <div
@@ -1188,7 +1233,7 @@ export function CharacterSheet({
                   className="rounded-lg border border-vng-border/80 bg-vng-bg/60 p-3 space-y-2"
                 >
                 <div className="flex items-center gap-2">
-                  {fieldReadOnly ? (
+                  {!canRenameField ? (
                     <span className="text-xs font-semibold uppercase text-vng-amber">{field.name}</span>
                   ) : (
                     <input
@@ -1208,7 +1253,17 @@ export function CharacterSheet({
                       {fieldLocked ? 'ЗАКРЫТО' : 'ОТКРЫТО'}
                     </button>
                   )}
-                  {canEdit && <span className="text-[10px] text-vng-muted">фиксировано</span>}
+                  {gmEditing && !coreField && (
+                    <button
+                      type="button"
+                      className="text-vng-muted hover:text-vng-danger p-1"
+                      onClick={() => removeSpecialField(field.id)}
+                      title="Удалить поле"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                  {coreField && <span className="text-[10px] text-vng-muted shrink-0">базовое</span>}
                 </div>
                 {isAbilitiesField(field.name) ? (
                   <AbilityLevelsTable

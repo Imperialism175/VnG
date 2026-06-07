@@ -40,6 +40,7 @@ export function normalizeTheme(raw: unknown): RoomTheme {
     blue: sanitizeHex(t.blue, DEFAULT_THEME.blue),
     gold: sanitizeHex(t.gold, DEFAULT_THEME.gold),
     bg: sanitizeHex(t.bg, DEFAULT_THEME.bg),
+    variant: t.variant === 'premium' ? 'premium' : 'default',
   }
 }
 

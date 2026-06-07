@@ -5,6 +5,15 @@ export const DEFAULT_THEME: RoomTheme = {
   blue: '#33ff33',
   gold: '#33ff33',
   bg: '#000000',
+  variant: 'default',
+}
+
+/** Премиальный dark mode — стекло, яркий акцент, швейцарская сетка */
+export const PRO_MAX_THEME: RoomTheme = {
+  blue: '#e8eaed',
+  gold: '#00f0ff',
+  bg: '#0d1117',
+  variant: 'premium',
 }
 
 const HEX6 = /^#([0-9a-fA-F]{6})$/
@@ -44,11 +53,12 @@ export function mixColors(a: string, b: string, t: number): string {
 }
 
 export function mergeTheme(global: RoomTheme, personal?: RoomTheme | null): RoomTheme {
-  if (!personal) return { ...global }
+  if (!personal) return { ...global, variant: 'default' }
   return {
     blue: personal.blue || global.blue,
     gold: personal.gold || global.gold,
     bg: personal.bg || global.bg,
+    variant: 'default',
   }
 }
 
@@ -56,15 +66,20 @@ export function resolveTheme(theme: RoomTheme): RoomTheme {
   const fg = normalizeThemeHex(theme.blue, DEFAULT_THEME.blue)
   const bg = normalizeThemeHex(theme.bg, DEFAULT_THEME.bg)
   const gold = normalizeThemeHex(theme.gold, fg)
-  return { blue: fg, gold, bg }
+  const variant = theme.variant === 'premium' ? 'premium' : 'default'
+  return { blue: fg, gold, bg, variant }
 }
 
 /** Применить палитру комнаты к оболочке (CSS-переменные DOS + Tailwind). */
 export function applyThemeVars(el: HTMLElement, theme: RoomTheme) {
-  const { blue: fg, gold: accent, bg } = resolveTheme(theme)
+  const { blue: fg, gold: accent, bg, variant } = resolveTheme(theme)
   const muted = mixColors(fg, bg, 0.55)
   const border = mixColors(fg, bg, 0.35)
+  const isPremium = variant === 'premium'
+  const surface = isPremium ? mixColors(bg, '#ffffff', 0.06) : bg
+  const elevated = isPremium ? mixColors(bg, '#ffffff', 0.1) : bg
 
+  el.dataset.vngThemeVariant = variant
   el.style.setProperty('--vng-dos-bg', bg)
   el.style.setProperty('--vng-dos-fg', fg)
   el.style.setProperty('--vng-dos-accent', accent)
@@ -72,8 +87,8 @@ export function applyThemeVars(el: HTMLElement, theme: RoomTheme) {
   el.style.setProperty('--vng-dos-border', border)
 
   el.style.setProperty('--color-vng-bg', bg)
-  el.style.setProperty('--color-vng-surface', bg)
-  el.style.setProperty('--color-vng-elevated', bg)
+  el.style.setProperty('--color-vng-surface', surface)
+  el.style.setProperty('--color-vng-elevated', elevated)
   el.style.setProperty('--color-vng-retro-bg', bg)
   el.style.setProperty('--color-vng-retro-panel', bg)
   el.style.setProperty('--color-vng-text', fg)

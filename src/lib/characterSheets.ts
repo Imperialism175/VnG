@@ -672,16 +672,36 @@ export function isSkillPointCounter(name: string) {
   return /очки\s*характеристик|скилл[-\s]*поинт/i.test(name)
 }
 
+export function isCoreSpecialFieldName(name: string): boolean {
+  const normalized = String(name ?? '').trim().toLowerCase()
+  return SPECIAL_FIELD_SLOTS.some(
+    (slot) => slot.fallback.toLowerCase() === normalized || slot.aliases.includes(normalized)
+  )
+}
+
+export function isCoreSpecialField(field: TextField): boolean {
+  return isCoreSpecialFieldName(field.name)
+}
+
+/** Базовые 3 слота листика + все дополнительные поля, созданные ГМ */
 export function ensureSpecialTextFields(textFields: TextField[] | undefined): TextField[] {
   const existing = Array.isArray(textFields) ? textFields : []
-  const byName = new Map(existing.map((f) => [String(f.name ?? '').trim().toLowerCase(), f]))
+  const remaining = [...existing]
+  const core: TextField[] = []
 
-  return SPECIAL_FIELD_SLOTS.map((slot) => {
-    const found = slot.aliases
-      .map((alias) => byName.get(alias))
-      .find((field): field is TextField => Boolean(field))
-    return found ? { ...found } : textField(slot.fallback, '')
-  })
+  for (const slot of SPECIAL_FIELD_SLOTS) {
+    const idx = remaining.findIndex((f) =>
+      slot.aliases.includes(String(f.name ?? '').trim().toLowerCase())
+    )
+    if (idx >= 0) {
+      core.push({ ...remaining[idx] })
+      remaining.splice(idx, 1)
+    } else {
+      core.push(textField(slot.fallback, ''))
+    }
+  }
+
+  return [...core, ...remaining.map((f) => ({ ...f }))]
 }
 
 function ensureAbilityLevelsTemplate(text: string): string {

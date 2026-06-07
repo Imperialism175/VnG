@@ -4,6 +4,7 @@ import type { ChatMessage, FeedItem, FeedTab, RollEvent } from '@/types'
 import { formatRollFeedLine } from '@/lib/rollFeed'
 import { Panel } from '@/components/ui/Panel'
 import { Button } from '@/components/ui/Button'
+import { animatePremiumTabPane } from '@/lib/premiumUx/premiumMotion'
 
 interface RoomFeedProps {
   rollEvents: RollEvent[]
@@ -43,6 +44,7 @@ export function RoomFeed({ rollEvents, chatMessages, onSendChat, gmPlayerId, dis
   const [tab, setTab] = useState<FeedTab>('all')
   const [draft, setDraft] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+  const feedPaneRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
 
   const items = useMemo<FeedItem[]>(() => {
@@ -60,6 +62,10 @@ export function RoomFeed({ rollEvents, chatMessages, onSendChat, gmPlayerId, dis
     if (tab === 'chat') return items.filter((i) => i.kind === 'chat')
     return items
   }, [items, tab])
+
+  useEffect(() => {
+    animatePremiumTabPane(feedPaneRef.current)
+  }, [tab])
 
   useEffect(() => {
     if (stickToBottom.current && scrollRef.current) {
@@ -84,16 +90,18 @@ export function RoomFeed({ rollEvents, chatMessages, onSendChat, gmPlayerId, dis
 
   return (
     <Panel
-      title="Лента комнаты"
-      icon={<ScrollText size={16} />}
+      title={fillHeight ? 'Лента' : 'Лента комнаты'}
+      icon={fillHeight ? undefined : <ScrollText size={16} />}
       fillHeight={fillHeight}
-      className={`vng-terminal-panel ${fillHeight ? 'h-full min-h-0' : 'max-h-[min(70vh,520px)] lg:max-h-[520px]'}`}
+      className={`vng-terminal-panel ${fillHeight ? 'vng-room-feed-panel h-full min-h-0' : 'max-h-[min(70vh,520px)] lg:max-h-[520px]'}`}
       action={
-        <div className="vng-terminal-tabs flex">
+        <div className="vng-terminal-tabs vng-terminal-tabs--feed flex shrink-0" role="tablist" aria-label="Фильтр ленты">
           {TABS.map(({ id, label }) => (
             <button
               key={id}
               type="button"
+              role="tab"
+              aria-selected={tab === id}
               onClick={() => setTab(id)}
               className={tab === id ? 'vng-tab--active font-bold' : 'text-vng-muted'}
             >
@@ -103,6 +111,10 @@ export function RoomFeed({ rollEvents, chatMessages, onSendChat, gmPlayerId, dis
         </div>
       }
     >
+      <div
+        ref={feedPaneRef}
+        className="vng-feed-tab-pane flex flex-1 min-h-0 flex-col overflow-hidden"
+      >
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -127,8 +139,9 @@ export function RoomFeed({ rollEvents, chatMessages, onSendChat, gmPlayerId, dis
           )
         )}
       </div>
+      </div>
 
-      <form onSubmit={handleSend} className="vng-dos-chat-input-wrap shrink-0">
+      <form onSubmit={handleSend} className="vng-dos-chat-input-wrap shrink-0 mt-0">
         <span className="vng-dos-prompt vng-dos-prompt--cmd" aria-hidden />
         <input
           value={draft}

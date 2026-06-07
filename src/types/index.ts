@@ -148,6 +148,8 @@ export interface RoomTheme {
   blue: string
   gold: string
   bg: string
+  /** Визуальный режим (только локальный UI, структура не меняется) */
+  variant?: 'default' | 'premium'
 }
 
 export interface RoomStageFx {

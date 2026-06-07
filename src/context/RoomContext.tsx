@@ -23,6 +23,7 @@ import type {
   RoomTheme,
   ScreenMessage,
 } from '@/types'
+import { getCheatRollPayload, shouldSkipDiceCooldown, withCheatGm } from '@/lib/cheatState'
 import { DICE_ROLL_COOLDOWN_MS } from '@/lib/diceCooldown'
 import type { DiceSides } from '@/types'
 import { syncLegacyHp } from '@/lib/encounterUtils'
@@ -307,7 +308,7 @@ export function RoomProvider({
           break
         case 'DICE_ROLL':
           setRollEvents((prev) => [...prev, msg.event])
-          if (msg.event.player_id === initialSession.playerId) {
+          if (msg.event.player_id === initialSession.playerId && !shouldSkipDiceCooldown()) {
             setDiceCooldownUntil(Date.now() + DICE_ROLL_COOLDOWN_MS)
           }
           break
@@ -374,8 +375,11 @@ export function RoomProvider({
   }, [diceCooldownUntil])
 
   const canRollDice = true
-  const diceCooldownSec =
-    diceCooldownUntil > Date.now() ? Math.ceil((diceCooldownUntil - Date.now()) / 1000) : 0
+  const diceCooldownSec = shouldSkipDiceCooldown()
+    ? 0
+    : diceCooldownUntil > Date.now()
+      ? Math.ceil((diceCooldownUntil - Date.now()) / 1000)
+      : 0
   void cooldownTick
 
   const myTheme = useMemo(
@@ -419,6 +423,7 @@ export function RoomProvider({
     scaleStatValue?: number | null
     desiredAbilityLevel?: number | null
   }) => {
+    const cheat = getCheatRollPayload()
     socketRef.current?.send({
       type: 'DICE_ROLL',
       count: opts.count,
@@ -428,11 +433,17 @@ export function RoomProvider({
       scale_stat_name: opts.scaleStatName ?? null,
       scale_stat_value: opts.scaleStatValue ?? 0,
       desired_ability_level: opts.desiredAbilityLevel ?? null,
+      ...(cheat ?? {}),
     })
   }, [])
 
   const rerollInspired = useCallback((opts: { count: number; sides: DiceSides; modifier: number; expression?: string }) => {
-    socketRef.current?.send({ type: 'DICE_REROLL_INSPIRED', ...opts })
+    const cheat = getCheatRollPayload(true)
+    socketRef.current?.send({
+      type: 'DICE_REROLL_INSPIRED',
+      ...opts,
+      ...(cheat ?? {}),
+    })
   }, [])
 
   const setHandRaised = useCallback((raised: boolean) => {
@@ -440,7 +451,7 @@ export function RoomProvider({
   }, [])
 
   const pingPlayer = useCallback((playerId: string) => {
-    socketRef.current?.send({ type: 'PING_PLAYER', player_id: playerId })
+    socketRef.current?.send(withCheatGm({ type: 'PING_PLAYER', player_id: playerId }))
   }, [])
 
   const sendChat = useCallback((text: string) => {
@@ -448,21 +459,21 @@ export function RoomProvider({
   }, [])
 
   const transferGm = useCallback((newGmId: string) => {
-    socketRef.current?.send({ type: 'CHANGE_GM', new_gm_id: newGmId })
+    socketRef.current?.send(withCheatGm({ type: 'CHANGE_GM', new_gm_id: newGmId }))
   }, [])
 
   const publishEncounter = useCallback((encounter: Omit<Encounter, 'room_id' | 'is_active'>) => {
-    socketRef.current?.send({ type: 'SHOW_ENCOUNTER', encounter: syncLegacyHp(encounter as Encounter) })
+    socketRef.current?.send(withCheatGm({ type: 'SHOW_ENCOUNTER', encounter: syncLegacyHp(encounter as Encounter) }))
   }, [])
 
   const updateActiveEncounter = useCallback((encounter: Encounter) => {
     const synced = syncLegacyHp(encounter)
     setActiveEncounter(synced)
-    socketRef.current?.send({ type: 'UPDATE_ENCOUNTER', encounter: synced })
+    socketRef.current?.send(withCheatGm({ type: 'UPDATE_ENCOUNTER', encounter: synced }))
   }, [])
 
   const dismissEncounter = useCallback(() => {
-    socketRef.current?.send({ type: 'HIDE_ENCOUNTER' })
+    socketRef.current?.send(withCheatGm({ type: 'HIDE_ENCOUNTER' }))
   }, [])
 
   const adjustPlayerHp = useCallback(
@@ -514,16 +525,18 @@ export function RoomProvider({
   )
 
   const updateRoomTheme = useCallback((target: 'all' | string, theme: RoomTheme, clearOverrides?: boolean) => {
-    socketRef.current?.send({
-      type: 'SET_THEME',
-      theme,
-      target_player_id: target === 'all' ? null : target,
-      clear_player_overrides: clearOverrides,
-    })
+    socketRef.current?.send(
+      withCheatGm({
+        type: 'SET_THEME',
+        theme,
+        target_player_id: target === 'all' ? null : target,
+        clear_player_overrides: clearOverrides,
+      })
+    )
   }, [])
 
   const clearPlayerTheme = useCallback((playerId: string) => {
-    socketRef.current?.send({ type: 'CLEAR_PLAYER_THEME', target_player_id: playerId })
+    socketRef.current?.send(withCheatGm({ type: 'CLEAR_PLAYER_THEME', target_player_id: playerId }))
   }, [])
 
   const setPersonalTheme = useCallback((theme: RoomTheme) => {
@@ -539,7 +552,7 @@ export function RoomProvider({
   const setAllowPlayerThemeEditing = useCallback((enabled: boolean) => {
     const next = Boolean(enabled)
     setAllowPlayerThemeEditingState(next)
-    socketRef.current?.send({ type: 'SET_ALLOW_PLAYER_THEME_EDITING', enabled: next })
+    socketRef.current?.send(withCheatGm({ type: 'SET_ALLOW_PLAYER_THEME_EDITING', enabled: next }))
   }, [])
 
   const setLevelPreset = useCallback((nextLevelId: string | null, variant: 'main' | 'alt') => {
@@ -547,42 +560,43 @@ export function RoomProvider({
     const normalizedVariant: 'main' | 'alt' = variant === 'alt' ? 'alt' : 'main'
     setLevelIdState(normalizedId)
     setLevelVariantState(normalizedVariant)
-    socketRef.current?.send({
-      type: 'SET_LEVEL_PRESET',
-      level_id: normalizedId,
-      variant: normalizedVariant,
-    })
+    socketRef.current?.send(
+      withCheatGm({
+        type: 'SET_LEVEL_PRESET',
+        level_id: normalizedId,
+        variant: normalizedVariant,
+      })
+    )
   }, [])
 
   const setShowLevelToPlayers = useCallback((show: boolean) => {
     const next = Boolean(show)
     setShowLevelToPlayersState(next)
-    socketRef.current?.send({
-      type: 'SET_LEVEL_VISIBILITY',
-      show_to_players: next,
-    })
+    socketRef.current?.send(withCheatGm({ type: 'SET_LEVEL_VISIBILITY', show_to_players: next }))
   }, [])
 
   const createNpcCharacter = useCallback((name: string) => {
-    socketRef.current?.send({ type: 'CREATE_NPC_CHARACTER', name: name.trim() })
+    socketRef.current?.send(withCheatGm({ type: 'CREATE_NPC_CHARACTER', name: name.trim() }))
   }, [])
 
   const deleteNpcCharacter = useCallback((playerId: string) => {
-    socketRef.current?.send({ type: 'DELETE_NPC_CHARACTER', player_id: playerId })
+    socketRef.current?.send(withCheatGm({ type: 'DELETE_NPC_CHARACTER', player_id: playerId }))
   }, [])
 
   const updateMusic = useCallback((url: string | null, playing: boolean) => {
-    socketRef.current?.send({ type: 'SET_MUSIC', url, playing })
+    socketRef.current?.send(withCheatGm({ type: 'SET_MUSIC', url, playing }))
   }, [])
 
   const startPoll = useCallback((question: string, options: string[], durationSec?: number) => {
     const duration = Number(durationSec)
-    socketRef.current?.send({
-      type: 'START_POLL',
-      question,
-      options,
-      duration_sec: Number.isFinite(duration) && duration > 0 ? Math.round(duration) : 0,
-    })
+    socketRef.current?.send(
+      withCheatGm({
+        type: 'START_POLL',
+        question,
+        options,
+        duration_sec: Number.isFinite(duration) && duration > 0 ? Math.round(duration) : 0,
+      })
+    )
   }, [])
 
   const castVote = useCallback((optionId: string) => {
@@ -590,43 +604,49 @@ export function RoomProvider({
   }, [])
 
   const endPoll = useCallback(() => {
-    socketRef.current?.send({ type: 'END_POLL' })
+    socketRef.current?.send(withCheatGm({ type: 'END_POLL' }))
   }, [])
 
   const clearPoll = useCallback(() => {
-    socketRef.current?.send({ type: 'CLEAR_POLL' })
+    socketRef.current?.send(withCheatGm({ type: 'CLEAR_POLL' }))
   }, [])
 
   const showScreenMessage = useCallback(
     (opts: { title?: string; text: string; targetPlayerId?: string | null }) => {
-      socketRef.current?.send({
-        type: 'SHOW_SCREEN_MESSAGE',
-        title: opts.title ?? '',
-        text: opts.text,
-        target_player_id: opts.targetPlayerId ?? null,
-      })
+      socketRef.current?.send(
+        withCheatGm({
+          type: 'SHOW_SCREEN_MESSAGE',
+          title: opts.title ?? '',
+          text: opts.text,
+          target_player_id: opts.targetPlayerId ?? null,
+        })
+      )
     },
     []
   )
 
   const dismissScreenMessage = useCallback(() => {
-    socketRef.current?.send({ type: 'DISMISS_SCREEN_MESSAGE' })
+    socketRef.current?.send(withCheatGm({ type: 'DISMISS_SCREEN_MESSAGE' }))
   }, [])
 
   const setHallOfFame = useCallback((hall: HallOfFame, password: string) => {
-    socketRef.current?.send({ type: 'SET_HALL_OF_FAME', hall_of_fame: hall, leaderboard_password: password })
+    socketRef.current?.send(
+      withCheatGm({ type: 'SET_HALL_OF_FAME', hall_of_fame: hall, leaderboard_password: password })
+    )
   }, [])
 
   const sendStageFx = useCallback((next: RoomStageFx) => {
-    socketRef.current?.send({
-      type: 'SET_STAGE_FX',
-      darkness: next.darkness,
-      flashlights_enabled_for: next.flashlightsEnabledFor,
-      equalizer_enabled: next.equalizerEnabled,
-      beat_flicker_enabled: next.beatFlickerEnabled,
-      beat_bpm: next.beatBpm,
-      beat_intensity: next.beatIntensity,
-    })
+    socketRef.current?.send(
+      withCheatGm({
+        type: 'SET_STAGE_FX',
+        darkness: next.darkness,
+        flashlights_enabled_for: next.flashlightsEnabledFor,
+        equalizer_enabled: next.equalizerEnabled,
+        beat_flicker_enabled: next.beatFlickerEnabled,
+        beat_bpm: next.beatBpm,
+        beat_intensity: next.beatIntensity,
+      })
+    )
   }, [])
 
   const patchStageFx = useCallback((patch: Partial<RoomStageFx>) => {

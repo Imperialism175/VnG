@@ -37,7 +37,7 @@ export function RoomHud({
   onToggleCalculator,
 }: RoomHudProps) {
   return (
-    <header className="vng-retro-header vng-dos-hud shrink-0 z-40" aria-label="Панель сессии">
+    <header className="vng-retro-header vng-dos-hud vng-premium-hero shrink-0 z-40" aria-label="Панель сессии">
       <div className="vng-dos-hud__grid max-w-[1600px] mx-auto">
         <div className="vng-dos-hud__row vng-dos-hud__row--primary">
           <span className="vng-dos-hud__brand">ВнГ</span>

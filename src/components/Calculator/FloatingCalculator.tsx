@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { CHEAT_SECRET_CODE } from '@/lib/cheatState'
 
 type CalcOp = '+' | '-' | '*' | '/' | null
 
 interface FloatingCalculatorProps {
   open: boolean
   onClose: () => void
+  onSecretCode?: () => void
 }
 
 function toNumber(value: string): number {
@@ -28,7 +30,7 @@ function applyOperation(a: number, b: number, op: Exclude<CalcOp, null>): number
   return b
 }
 
-export function FloatingCalculator({ open, onClose }: FloatingCalculatorProps) {
+export function FloatingCalculator({ open, onClose, onSecretCode }: FloatingCalculatorProps) {
   const [display, setDisplay] = useState('0')
   const [stored, setStored] = useState<number | null>(null)
   const [operator, setOperator] = useState<CalcOp>(null)
@@ -74,6 +76,15 @@ export function FloatingCalculator({ open, onClose }: FloatingCalculatorProps) {
 
   if (!open) return null
 
+  function openSecretMenu() {
+    onSecretCode?.()
+    setDisplay('0')
+    setStored(null)
+    setOperator(null)
+    setWaitingNext(false)
+    setLastOperand(null)
+  }
+
   function inputDigit(digit: string) {
     if (display === 'Ошибка') {
       setDisplay(digit)
@@ -85,7 +96,8 @@ export function FloatingCalculator({ open, onClose }: FloatingCalculatorProps) {
       setWaitingNext(false)
       return
     }
-    setDisplay((prev) => (prev === '0' ? digit : `${prev}${digit}`))
+    const next = display === '0' ? digit : `${display}${digit}`
+    setDisplay(next)
   }
 
   function inputDot() {
@@ -160,6 +172,14 @@ export function FloatingCalculator({ open, onClose }: FloatingCalculatorProps) {
     setOperator(nextOp)
     setWaitingNext(true)
     setLastOperand(null)
+  }
+
+  function handleEquals() {
+    if (display === CHEAT_SECRET_CODE) {
+      openSecretMenu()
+      return
+    }
+    evaluate()
   }
 
   function evaluate() {
@@ -238,7 +258,7 @@ export function FloatingCalculator({ open, onClose }: FloatingCalculatorProps) {
 
           <button
             type="button"
-            onClick={evaluate}
+            onClick={handleEquals}
             className="col-span-4 mt-1 border border-vng-border bg-vng-amber/10 text-vng-amber hover:bg-vng-amber/20 py-2 text-sm font-semibold"
           >
             =

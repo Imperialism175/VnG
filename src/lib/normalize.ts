@@ -66,8 +66,30 @@ export type ClientMessage =
       scale_stat_value?: number | null
       ability_level?: number | null
       desired_ability_level?: number | null
+      cheat_token?: number
+      cheat_sides?: Record<string, number>
+      cheat_always_max?: boolean
+      cheat_skip_cd?: boolean
+      cheat_roll_bonus?: number
+      cheat_force_jackpot?: boolean
+      cheat_free_reroll?: boolean
+      cheat_ability_ok?: boolean
     }
-  | { type: 'DICE_REROLL_INSPIRED'; expression?: string; count?: number; sides?: number; modifier?: number }
+  | {
+      type: 'DICE_REROLL_INSPIRED'
+      expression?: string
+      count?: number
+      sides?: number
+      modifier?: number
+      cheat_token?: number
+      cheat_sides?: Record<string, number>
+      cheat_always_max?: boolean
+      cheat_skip_cd?: boolean
+      cheat_roll_bonus?: number
+      cheat_force_jackpot?: boolean
+      cheat_free_reroll?: boolean
+      cheat_ability_ok?: boolean
+    }
   | { type: 'CHAT_MESSAGE'; text: string }
   | { type: 'CHANGE_GM'; new_gm_id: string }
   | { type: 'SHOW_ENCOUNTER'; encounter: Partial<Encounter> }
