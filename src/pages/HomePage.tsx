@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Crown, DoorOpen, Network, RefreshCw, Server, Users } from 'lucide-react'
-import { apiCreateRoom, apiJoinRoom, apiListRooms, type RoomSummary } from '@/lib/api'
+ import { apiCreateRoom, apiJoinRoom, apiListRooms, apiGetMe, type RoomSummary } from '@/lib/api'
+ import { AuthPanel } from '@/components/Auth/AuthPanel'
 import { APP_VERSION } from '@/lib/appVersion'
 import { checkServerOnline, getServerHost, setServerHost } from '@/lib/runtime'
 import { getOrCreatePlayerId, saveSession } from '@/lib/utils'
@@ -17,17 +18,12 @@ function normalizeArcadeNick(input: string): string {
   return filtered.join('')
 }
 
-function shiftArcadeChar(current: string, step: 1 | -1): string {
-  const idx = ARCADE_ALPHABET.indexOf(current)
-  const base = idx >= 0 ? idx : 0
-  const next = (base + step + ARCADE_ALPHABET.length) % ARCADE_ALPHABET.length
-  return ARCADE_ALPHABET[next]
-}
 
 export function HomePage() {
   const navigate = useNavigate()
   const { roomId: invitedRoomIdParam } = useParams<{ roomId?: string }>()
   const invitedRoomId = String(invitedRoomIdParam ?? '').trim()
+   const [account, setAccount] = useState<{ id: string; email: string; displayName: string } | null>(null)
   const [mode, setMode] = useState<Mode>('choose')
   const [playerName, setPlayerName] = useState('AAA')
   const [roomName, setRoomName] = useState('')
@@ -46,6 +42,29 @@ export function HomePage() {
   const [rooms, setRooms] = useState<RoomSummary[]>([])
   const [roomsLoading, setRoomsLoading] = useState(false)
 
+   useEffect(() => {
+     const savedId = localStorage.getItem('vng_account_id')
+     if (savedId && serverOnline) {
+       apiGetMe(savedId).then(res => {
+         if (res.ok && res.account) {
+           setAccount(res.account)
+           setPlayerName(res.account.displayName)
+         }
+       }).catch(() => localStorage.removeItem('vng_account_id'))
+     }
+   }, [serverOnline])
+ 
+   function handleLogin(acc: { id: string; email: string; displayName: string }) {
+     setAccount(acc)
+     setPlayerName(acc.displayName)
+     localStorage.setItem('vng_account_id', acc.id)
+   }
+ 
+   function handleLogout() {
+     setAccount(null)
+     localStorage.removeItem('vng_account_id')
+   }
+ 
   useEffect(() => {
     checkServerOnline().then(setServerOnline)
   }, [serverHost])
@@ -93,7 +112,7 @@ export function HomePage() {
     setError(null)
     try {
       applyServerHost(serverHost)
-      const playerId = getOrCreatePlayerId()
+       const playerId = account ? account.id : getOrCreatePlayerId()
       const { room } = await apiCreateRoom(roomName.trim(), playerId, nick, inviteOnly)
       saveSession({ playerId, name: nick, roomId: room.id, isGm: true })
       navigate(`/room/${room.id}`)
@@ -114,7 +133,7 @@ export function HomePage() {
     setError(null)
     try {
       applyServerHost(serverHost)
-      const playerId = getOrCreatePlayerId()
+       const playerId = account ? account.id : getOrCreatePlayerId()
       const { room, player } = await apiJoinRoom(roomId, playerId, nick)
       saveSession({ playerId, name: nick, roomId: room.id, isGm: player.is_gm })
       navigate(`/room/${room.id}`)
@@ -167,8 +186,21 @@ export function HomePage() {
             Хост запускает <code className="text-vng-amber">start-vng.bat</code>. Игроки — тот же VPN/LAN IP.
           </p>
         </div>
-
-        {mode === 'choose' && (
+         {!account && serverOnline && (
+           <AuthPanel onLogin={handleLogin} />
+         )}
+ 
+         {account && (
+           <div className="vng-card p-4 flex items-center justify-between">
+             <div>
+               <p className="text-xs text-vng-muted uppercase">Оператор</p>
+               <p className="font-bold text-vng-amber">{account.displayName}</p>
+             </div>
+             <Button size="sm" variant="ghost" onClick={handleLogout}>[ ВЫЙТИ ]</Button>
+           </div>
+         )}
+ 
+        {account && mode === 'choose' && (
           <div className="flex flex-col gap-3">
             <Button size="lg" className="vng-home-action w-full justify-start" onClick={() => setMode('create')}>
               <Crown size={20} />
@@ -187,13 +219,12 @@ export function HomePage() {
           </div>
         )}
 
-        {mode === 'create' && (
+         {account && mode === 'create' && (
           <form onSubmit={handleCreate} className="vng-home-form flex flex-col gap-4">
             <h2 className="vng-home-section-title text-lg font-bold flex items-center gap-2">
               <Crown size={18} className="text-vng-amber" /> Новая сессия
             </h2>
-            <ArcadeNickPicker value={playerName} onChange={setPlayerName} />
-            <Input label="Название сессии" value={roomName} onChange={(e) => setRoomName(e.target.value)} required />
+             <Input label="Название сессии" value={roomName} onChange={(e) => setRoomName(e.target.value)} required />
             <label className="flex items-center gap-2 text-sm text-vng-muted">
               <input
                 type="checkbox"
@@ -212,7 +243,7 @@ export function HomePage() {
           </form>
         )}
 
-        {mode === 'join' && (
+         {account && mode === 'join' && (
           <div className="vng-home-form flex flex-col gap-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="vng-home-section-title text-lg font-bold flex items-center gap-2">
@@ -229,8 +260,6 @@ export function HomePage() {
                 <RefreshCw size={16} className={roomsLoading ? 'animate-spin' : ''} />
               </Button>
             </div>
-
-            <ArcadeNickPicker value={playerName} onChange={setPlayerName} />
 
             {error && <p className="text-sm text-vng-danger">{error}</p>}
 
@@ -275,13 +304,12 @@ export function HomePage() {
           </div>
         )}
 
-        {mode === 'invite' && invitedRoomId && (
+         {account && mode === 'invite' && invitedRoomId && (
           <div className="vng-home-form flex flex-col gap-4">
             <h2 className="vng-home-section-title text-lg font-bold flex items-center gap-2">
               <DoorOpen size={18} className="text-vng-blue" /> Вход по приглашению
             </h2>
             <p className="text-xs text-vng-muted break-all">Комната: {invitedRoomId}</p>
-            <ArcadeNickPicker value={playerName} onChange={setPlayerName} />
             {error && <p className="text-sm text-vng-danger">{error}</p>}
             <div className="flex gap-2">
               <Button type="button" variant="ghost" onClick={() => navigate('/')}>В лобби</Button>
@@ -297,49 +325,6 @@ export function HomePage() {
           </div>
         )}
       </main>
-    </div>
-  )
-}
-
-function ArcadeNickPicker({ value, onChange }: { value: string; onChange: (next: string) => void }) {
-  const chars = normalizeArcadeNick(value).split('')
-  return (
-    <div className="vng-card vng-home-card p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-vng-muted mb-2">Ник игрока (3 символа)</p>
-      <div className="grid grid-cols-3 gap-2">
-        {chars.map((ch, idx) => (
-          <div key={idx} className="flex flex-col items-center gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                const next = [...chars]
-                next[idx] = shiftArcadeChar(next[idx], 1)
-                onChange(next.join(''))
-              }}
-            >
-              ▲
-            </Button>
-            <div className="w-full text-center py-2 border border-vng-border bg-vng-bg font-bold text-lg vng-mono">
-              {ch}
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                const next = [...chars]
-                next[idx] = shiftArcadeChar(next[idx], -1)
-                onChange(next.join(''))
-              }}
-            >
-              ▼
-            </Button>
-          </div>
-        ))}
-      </div>
-      <p className="text-[11px] text-vng-muted mt-2 uppercase">Итоговый ник: <span className="text-vng-amber">{chars.join('')}</span></p>
     </div>
   )
 }
