@@ -48,11 +48,6 @@ import {
   getPremiumPlayer,
 } from './wishes.js'
 
- import {
-   registerAccount,
-   loginAccount,
-   findAccountById,
- } from './accounts.js'
 const HOST = process.env.HOST || '0.0.0.0'
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const DIST_DIR = join(__dirname, '..', 'dist')
@@ -681,56 +676,6 @@ const httpServer = createServer(async (req, res) => {
       return
     }
 
- 
-     // --- VNG ACCOUNTS endpoints ---
-     if (req.method === 'POST' && url.pathname === '/api/auth/register') {
-       const { email, password, displayName } = body
-       if (!email || !password || !displayName) {
-         json(400, { ok: false, error: 'Заполните все поля' })
-         return
-       }
-       if (password.length < 5) {
-         json(400, { ok: false, error: 'Пароль слишком короткий' })
-         return
-       }
-       try {
-         const account = registerAccount(email, password, displayName)
-         json(201, { ok: true, account })
-       } catch (e) {
-         json(400, { ok: false, error: e.message })
-       }
-       return
-     }
- 
-     if (req.method === 'POST' && url.pathname === '/api/auth/login') {
-       const { email, password } = body
-       if (!email || !password) {
-         json(400, { ok: false, error: 'Заполните все поля' })
-         return
-       }
-       try {
-         const account = loginAccount(email, password)
-         json(200, { ok: true, account })
-       } catch (e) {
-         json(400, { ok: false, error: e.message })
-       }
-       return
-     }
- 
-     if (req.method === 'GET' && url.pathname === '/api/auth/me') {
-       const id = url.searchParams.get('id')
-       if (!id) {
-         json(400, { ok: false, error: 'Нет id' })
-         return
-       }
-       const account = findAccountById(id)
-       if (!account) {
-         json(404, { ok: false, error: 'Аккаунт не найден' })
-         return
-       }
-       json(200, { ok: true, account })
-       return
-     }
 
      // --- VNG PREMIUM endpoints ---
 

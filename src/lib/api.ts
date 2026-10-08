@@ -41,23 +41,6 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 export async function apiListRooms() {
   return apiFetch<{ rooms: RoomSummary[] }>('/api/rooms')
 }
- export async function apiLogin(email: string, password: string) {
-   return apiFetch<{ ok: boolean; account: { id: string; email: string; displayName: string } }>('/api/auth/login', {
-     method: 'POST',
-     body: JSON.stringify({ email, password }),
-   })
- }
- 
- export async function apiRegister(email: string, password: string, displayName: string) {
-   return apiFetch<{ ok: boolean; account: { id: string; email: string; displayName: string } }>('/api/auth/register', {
-     method: 'POST',
-     body: JSON.stringify({ email, password, displayName }),
-   })
- }
- 
- export async function apiGetMe(id: string) {
-   return apiFetch<{ ok: boolean; account: { id: string; email: string; displayName: string } }>(`/api/auth/me?id=${encodeURIComponent(id)}`)
- }
 
 export async function apiCreateRoom(name: string, playerId: string, playerName: string, inviteOnly = false) {
   return apiFetch<{
