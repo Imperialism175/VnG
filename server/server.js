@@ -39,6 +39,14 @@ import {
   DICE_ROLL_COOLDOWN_MS,
 } from './roomPresence.js'
 import { rooms, SERVER_PORT, MAX_ROLLS, MAX_CHAT, getLanAddresses } from './state.js'
+import {
+  createWish,
+  getWishesByPlayer,
+  getAllWishes,
+  updateWish,
+  getUnreadCount,
+  getPremiumPlayer,
+} from './wishes.js'
 
 const HOST = process.env.HOST || '0.0.0.0'
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -667,6 +675,96 @@ const httpServer = createServer(async (req, res) => {
       })
       return
     }
+
+
+     // --- VNG PREMIUM endpoints ---
+
+     function escapeHtml(str) {
+       return String(str ?? '')
+         .replace(/&/g, '&amp;')
+         .replace(/</g, '&lt;')
+         .replace(/>/g, '&gt;')
+         .replace(/"/g, '&quot;')
+         .replace(/'/g, '&#39;')
+     }
+
+
+    if (req.method === 'POST' && url.pathname === '/api/premium/wish') {
+      const { playerId, playerName, text, contact, offeredPrice } = body
+      try {
+        const wish = createWish(String(playerId ?? ''), String(playerName ?? ''), {
+          text: escapeHtml(text),
+          contact: escapeHtml(contact),
+          offeredPrice: offeredPrice ? escapeHtml(offeredPrice) : undefined,
+        })
+        json(201, { ok: true, wish })
+      } catch (e) {
+        json(400, { ok: false, error: e.message })
+      }
+      return
+    }
+
+     if (req.method === 'GET' && url.pathname === '/api/premium/wish') {
+       const playerId = String(url.searchParams.get('playerId') ?? '').trim()
+       if (!playerId) {
+         json(400, { ok: false, error: 'Необходим playerId' })
+         return
+       }
+       json(200, {
+         ok: true,
+         wishes: getWishesByPlayer(playerId),
+         premiumInfo: getPremiumPlayer(playerId),
+       })
+       return
+     }
+
+     if (req.method === 'GET' && url.pathname === '/api/premium/admin/wishes') {
+       const adminEnv = process.env.VNG_ADMIN_ID
+       if (!adminEnv) {
+         json(403, { ok: false, error: 'Не настроен администратор' })
+         return
+       }
+       const adminId = String(url.searchParams.get('adminId') ?? '').trim()
+       if (adminId !== adminEnv) {
+         json(403, { ok: false, error: 'Нет доступа' })
+         return
+       }
+       json(200, { ok: true, wishes: getAllWishes(), unreadCount: getUnreadCount() })
+       return
+     }
+
+    if (req.method === 'PATCH' && url.pathname.startsWith('/api/premium/admin/wish/')) {
+      const wishId = url.pathname.split('/api/premium/admin/wish/')[1] ?? ''
+      const patchBody = body
+      const adminEnv = process.env.VNG_ADMIN_ID
+      if (!adminEnv) {
+        json(403, { ok: false, error: 'Не настроен администратор' })
+        return
+      }
+      const adminId = String(patchBody.adminId ?? '').trim()
+      if (adminId !== adminEnv) {
+        json(403, { ok: false, error: 'Нет доступа' })
+        return
+      }
+       const ALLOWED_STATUSES = ['new', 'negotiating', 'paid', 'in_progress', 'done', 'rejected', 'refunded']
+       const updates = {}
+       if (patchBody.status !== undefined) {
+         if (!ALLOWED_STATUSES.includes(patchBody.status)) {
+           json(400, { ok: false, error: `Недопустимый статус: ${patchBody.status}` })
+           return
+         }
+         updates.status = patchBody.status
+       }
+       if (patchBody.finalPrice !== undefined) updates.finalPrice = escapeHtml(patchBody.finalPrice)
+       if (patchBody.adminNote !== undefined) updates.adminNote = escapeHtml(patchBody.adminNote)
+       try {
+         const wish = updateWish(wishId, updates, adminId)
+         json(200, { ok: true, wish })
+       } catch (e) {
+         json(400, { ok: false, error: e.message })
+       }
+       return
+     }
 
     if (req.method === 'GET' && serveStatic(req, res)) return
 

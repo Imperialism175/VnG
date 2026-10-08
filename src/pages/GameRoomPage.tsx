@@ -24,6 +24,7 @@ import { RoomHud } from '@/components/RoomHud/RoomHud'
 import { ThemeColorEditor } from '@/components/RoomTheme/ThemeColorEditor'
 import { FloatingCalculator } from '@/components/Calculator/FloatingCalculator'
 import { SecretCheatMenu } from '@/components/Calculator/SecretCheatMenu'
+ import { PremiumModal } from '@/components/Premium/PremiumModal'
 import {
   effectiveGmUi,
   effectiveGmVision,
@@ -120,8 +121,9 @@ function GameRoomContent() {
   const [playerTab, setPlayerTab] = useState<PlayerTabId>('sheet')
   const [gmTab, setGmTab] = useState<GmTabId>('players')
   const [showGmPanel, setShowGmPanel] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [dismissedScreenId, setDismissedScreenId] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [premiumOpen, setPremiumOpen] = useState(false)
   const [themePanelOpen, setThemePanelOpen] = useState(false)
   const [calculatorOpen, setCalculatorOpen] = useState(false)
   const [cheatMenuOpen, setCheatMenuOpen] = useState(false)
@@ -465,6 +467,7 @@ function GameRoomContent() {
         onToggleTheme={() => setThemePanelOpen((v) => !v)}
         calculatorOpen={calculatorOpen}
         onToggleCalculator={() => setCalculatorOpen((v) => !v)}
+        onTogglePremium={() => setPremiumOpen((v) => !v)}
       />
 
       {themePanelOpen && (
@@ -649,6 +652,14 @@ function GameRoomContent() {
         }}
       />
       <SecretCheatMenu open={cheatMenuOpen} onClose={() => setCheatMenuOpen(false)} />
+      {premiumOpen && (
+        <PremiumModal
+          onClose={() => setPremiumOpen(false)}
+          playerId={session.playerId}
+          playerName={session.playerName}
+          isAdmin={session.playerId === import.meta.env.VITE_VNG_ADMIN_ID}
+        />
+      )}
 
       {visibleScreenMessage && (
         <ScreenMessageOverlay

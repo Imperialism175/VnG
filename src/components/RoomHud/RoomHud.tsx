@@ -17,6 +17,7 @@ interface RoomHudProps {
   onToggleTheme?: () => void
   calculatorOpen?: boolean
   onToggleCalculator?: () => void
+  onTogglePremium: () => void
 }
 
 export function RoomHud({
@@ -35,22 +36,19 @@ export function RoomHud({
   onToggleTheme,
   calculatorOpen,
   onToggleCalculator,
+  onTogglePremium,
 }: RoomHudProps) {
   return (
     <header className="vng-retro-header vng-dos-hud vng-premium-hero shrink-0 z-40" aria-label="Панель сессии">
       <div className="vng-dos-hud__grid max-w-[1600px] mx-auto">
         <div className="vng-dos-hud__row vng-dos-hud__row--primary">
           <span className="vng-dos-hud__brand">ВнГ</span>
-          <span className="vng-dos-hud__sep" aria-hidden>
-            │
-          </span>
+          <span className="vng-dos-hud__sep" aria-hidden>│</span>
           <div className="vng-dos-hud__pair vng-dos-hud__pair--timer">
             <span className="vng-dos-hud__label">Сессия</span>
             <SessionTimer startMs={sessionStartMs} />
           </div>
-          <span className="vng-dos-hud__sep" aria-hidden>
-            │
-          </span>
+          <span className="vng-dos-hud__sep" aria-hidden>│</span>
           <div className="vng-dos-hud__pair vng-dos-hud__pair--room min-w-0 flex-1">
             <span className="vng-dos-hud__label">Комната</span>
             <span className="vng-dos-hud__value truncate">{roomName}</span>
@@ -60,31 +58,23 @@ export function RoomHud({
         <div className="vng-dos-hud__row vng-dos-hud__row--secondary">
           <div className="vng-dos-hud__pair">
             <span className="vng-dos-hud__label">Сеть</span>
-            <span
-              className={`vng-dos-hud__value ${connected ? 'vng-dos-hud__status--ok' : 'vng-dos-hud__status--err'}`}
-            >
+            <span className={`vng-dos-hud__value ${connected ? 'vng-dos-hud__status--ok' : 'vng-dos-hud__status--err'}`}>
               {connected ? 'подключено' : 'нет связи'}
             </span>
           </div>
-          <span className="vng-dos-hud__sep" aria-hidden>
-            │
-          </span>
+          <span className="vng-dos-hud__sep" aria-hidden>│</span>
           <div className="vng-dos-hud__pair">
             <span className="vng-dos-hud__label">Игроков</span>
             <span className="vng-dos-hud__value">{playerCount}</span>
           </div>
-          <span className="vng-dos-hud__sep" aria-hidden>
-            │
-          </span>
+          <span className="vng-dos-hud__sep" aria-hidden>│</span>
           <div className="vng-dos-hud__pair min-w-0">
             <span className="vng-dos-hud__label">Вы</span>
             <span className="vng-dos-hud__value truncate max-w-[10rem]">{playerName}</span>
           </div>
           {levelLabel ? (
             <>
-              <span className="vng-dos-hud__sep" aria-hidden>
-                │
-              </span>
+              <span className="vng-dos-hud__sep" aria-hidden>│</span>
               <div className="vng-dos-hud__pair min-w-0">
                 <span className="vng-dos-hud__label">Уровень</span>
                 <span className="vng-dos-hud__value break-words">{levelLabel}</span>
@@ -93,12 +83,7 @@ export function RoomHud({
           ) : null}
           <div className="vng-dos-hud__actions ml-auto flex items-center gap-2 shrink-0">
             {onToggleTheme && showThemeToggle && (
-              <button
-                type="button"
-                onClick={onToggleTheme}
-                className="vng-tui-btn vng-tui-btn--ghost text-xs"
-                aria-expanded={themeOpen}
-              >
+              <button type="button" onClick={onToggleTheme} className="vng-tui-btn vng-tui-btn--ghost text-xs" aria-expanded={themeOpen}>
                 {themeOpen ? 'Скрыть цвета' : 'Цвета'}
               </button>
             )}
@@ -112,6 +97,9 @@ export function RoomHud({
                 {copied ? 'Скопировано' : 'Пригласить'}
               </button>
             )}
+            <button type="button" onClick={onTogglePremium} className="vng-tui-btn vng-tui-btn--ghost text-xs">
+              [ PREMIUM ]
+            </button>
             <Button size="sm" variant="ghost" onClick={onLeave} className="shrink-0">
               Выйти
             </Button>
