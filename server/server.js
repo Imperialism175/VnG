@@ -883,6 +883,55 @@ wss.on('connection', (ws, req) => {
         base.sheet_preset_id ?? null,
         base.class_status ?? ''
       )
+      let finalStats = playerLockedPayload.stats
+      let finalSpells = existing?.spells || []
+      let finalChoiceConfirmed = existing?.spellsChoiceConfirmed || false
+
+      if (base.sheet_preset_id === 'old-friend') {
+        if (Array.isArray(finalStats)) {
+          finalStats = finalStats.map(s => {
+            if (['механика', 'плоть', 'духовность'].includes(s.name.toLowerCase())) {
+              let val = parseInt(s.value, 10)
+              if (isNaN(val) || val < -1) val = -1
+              else if (val > 1) val = 1
+              return { ...s, value: String(val >= 0 && val !== 0 ? `+${val}` : val) }
+            }
+            return s
+          })
+        }
+
+        if (actorIsGm(player, msg)) {
+          finalSpells = char.spells || finalSpells
+          finalChoiceConfirmed = char.spellsChoiceConfirmed !== undefined ? char.spellsChoiceConfirmed : finalChoiceConfirmed
+        } else if (targetId === playerId) {
+          const newChoiceConfirmed = char.spellsChoiceConfirmed === true
+          const isStartingConfirmation = !existing?.spellsChoiceConfirmed && newChoiceConfirmed
+          
+          if (isStartingConfirmation) {
+            const requestedUnlockedCount = (char.spells || []).filter(s => s.unlocked).length
+            if (requestedUnlockedCount === 4) {
+              finalChoiceConfirmed = true
+              finalSpells = (char.spells || []).map(cs => {
+                const ex = finalSpells.find(s => s.level === cs.level)
+                return { 
+                  level: cs.level, 
+                  text: cs.text !== undefined ? cs.text : (ex?.text ?? ''),
+                  unlocked: Boolean(cs.unlocked) 
+                }
+              })
+            }
+          } else {
+            finalSpells = finalSpells.map(ex => {
+              const cs = (char.spells || []).find(s => s.level === ex.level)
+              if (cs && ex.unlocked) {
+                return { ...ex, text: cs.text !== undefined ? cs.text : ex.text }
+              }
+              return ex
+            })
+          }
+        }
+      }
+
       const updated = {
         ...base,
         text_fields: resolvedTextFields,
@@ -892,7 +941,7 @@ wss.on('connection', (ws, req) => {
         stat_points_locked: actorIsGm(player, msg)
           ? Boolean(char.stat_points_locked ?? base.stat_points_locked)
           : Boolean(existing?.stat_points_locked),
-        stats: playerLockedPayload.stats,
+        stats: finalStats,
         counters: ensureInspirationCounter(playerLockedPayload.counters),
         is_npc: existing?.is_npc ?? base.is_npc ?? isNpcCharacter({ player_id: targetId }),
         npc_visibility:
@@ -905,6 +954,8 @@ wss.on('connection', (ws, req) => {
           actorIsGm(player, msg) && typeof char.in_party === 'boolean'
             ? char.in_party
             : (existing?.in_party ?? base.in_party ?? false),
+        spells: finalSpells,
+        spellsChoiceConfirmed: finalChoiceConfirmed,
         updated_at: new Date().toISOString(),
       }
       // Для совместимости: если ГМ управляет npc_visibility — синхронизируем in_party

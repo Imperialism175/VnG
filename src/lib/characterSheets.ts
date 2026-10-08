@@ -10,7 +10,8 @@ export const DEFAULT_STATS = [
   'УДАЧА',
 ] as const
 
-export type SheetPresetId =
+ export type SheetPresetId =
+   | 'old-friend'
   | 'classic'
   | 'characteristic-sheet'
   | 'friendship'
@@ -161,6 +162,43 @@ function withBase(base: Character, opts?: {
 }
 
 export const SHEET_PRESETS: SheetPresetDef[] = [
+   {
+     id: 'old-friend',
+     label: 'ЛИСТ СТАРОГО ДРУГА',
+     points: 'спецправила',
+     pointsValue: null,
+     notes: 'Характеристики строго (-1, 0, 1). 7 уровней заклинаний, из которых открываются только 4.',
+     apply: (base) => {
+       const prepared = withBase(base, {
+         classStatus: 'ЛИСТ СТАРОГО ДРУГА',
+         skillPoints: null,
+         extraText: [
+           textField(
+             'Правило листика',
+             'Характеристики МЕХАНИКА, ПЛОТЬ, ДУХОВНОСТЬ могут быть только -1, 0 или 1.'
+           ),
+         ],
+       })
+       const text_fields = prepared.text_fields.filter(f => String(f.name ?? '').trim().toLowerCase() !== 'способности')
+       
+       const spells = []
+       for (let i = 1; i <= 7; i++) {
+         spells.push({ level: i, text: '', unlocked: false })
+       }
+ 
+       return {
+         ...prepared,
+         text_fields,
+         stats: [
+           stat('МЕХАНИКА', '0'),
+           stat('ПЛОТЬ', '0'),
+           stat('ДУХОВНОСТЬ', '0'),
+         ],
+         spells,
+         spellsChoiceConfirmed: false,
+       }
+     },
+   },
   {
     id: 'classic',
     label: 'Классический листик',
@@ -821,6 +859,7 @@ const TABLES: Partial<Record<SheetPresetId, ThresholdTable>> = {
   'characteristic-sheet': table([]),
   friendship: table([]),
   interleaf: table([]),
+   'old-friend': table([]),
   condemned: table([
     [1, '-∞'], [2, '-∞'], [3, '-∞'], [4, '-∞'], [5, '-∞'], [6, '-∞'], [8, -1],
   ]),
@@ -877,6 +916,7 @@ function normalizePresetIdByClassStatus(classStatus: string): SheetPresetId | nu
   if (value.includes('междулист') || value.includes('междудист')) return 'interleaf'
   if (value.includes('дружб')) return 'friendship'
   if (value.includes('приговор')) return 'condemned'
+   if (value.includes('друг') && value.includes('стар')) return 'old-friend'
   if (value.includes('альт кайна')) return 'alt-kaina'
   if (value.includes('молчун')) return 'molchun'
   if (value.includes('гарри')) return 'garry'

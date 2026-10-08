@@ -1,3 +1,9 @@
+ export interface SpecialSpellSlot {
+   level: number
+   text: string
+   unlocked: boolean
+ }
+ 
 export interface TextField {
   id: string
   name: string
@@ -43,6 +49,8 @@ export interface Character {
   /** Публичность листа NPC для игроков (ГМ управляет) */
   npc_visibility?: 'restricted' | 'full'
   updated_at?: string
+   spells?: SpecialSpellSlot[]
+   spellsChoiceConfirmed?: boolean
 }
 
 export interface Player {
