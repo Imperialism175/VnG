@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Lock, RotateCw, Scroll, Trash2, Unlock, PlusCircle } from 'lucide-react'
-import type { Character, CounterField, StatField, TextField } from '@/types'
+import type { Character, CounterField, StatField, TextField, SpecialSpellSlot } from '@/types'
 import { generateId } from '@/lib/utils'
 import { StatIcon } from '@/lib/statIcons'
 import { Panel } from '@/components/ui/Panel'
@@ -1307,6 +1307,17 @@ export function CharacterSheet({
         </section>
         )}
 
+        {templateSelected && resolvedPresetId === 'old-friend' && !restrictedView && (
+           <OldFriendSpellsBlock
+             spells={local.spells}
+             confirmed={local.spellsChoiceConfirmed}
+             onUpdateSpells={(s) => scheduleSave({ ...local, spells: s })}
+             onConfirm={() => scheduleSave({ ...local, spellsChoiceConfirmed: !local.spellsChoiceConfirmed })}
+             readOnly={!canEdit || (!gmEditing && statPointsLocked)}
+             gmEditing={gmEditing}
+           />
+        )}
+
         {/* Counters */}
         {templateSelected && (
         <section>
@@ -1444,22 +1455,30 @@ export function CharacterSheet({
             )
           })()}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {activeStats.map((stat, index) => (
-              <StatRow
-                key={stat.id}
-                stat={stat}
-                classStatus={local.class_status}
-                sheetPresetId={local.sheet_preset_id ?? null}
-                index={index}
-                readOnly={!canEdit || (!gmEditing && statPointsLocked)}
-                canSpend={canEdit && !statPointsLocked && local.counters.some((c) => isSkillPointCounter(c.name))}
-                researcherMode={researcherMode}
-                canSetInfinity={canEdit && researcherMode}
-                onUpdate={(p) => updateStat(stat.id, p)}
-                onRemove={() => removeStat(stat.id)}
-                onSpendPoint={(d) => spendSkillPointOnStat(stat.id, d)}
+            {resolvedPresetId === 'old-friend' ? (
+              <OldFriendStatsBlock 
+                stats={activeStats} 
+                onUpdate={(id, p) => updateStat(id, p)} 
+                readOnly={!canEdit || (!gmEditing && statPointsLocked)} 
               />
-            ))}
+            ) : (
+              activeStats.map((stat, index) => (
+                <StatRow
+                  key={stat.id}
+                  stat={stat}
+                  classStatus={local.class_status}
+                  sheetPresetId={local.sheet_preset_id ?? null}
+                  index={index}
+                  readOnly={!canEdit || (!gmEditing && statPointsLocked)}
+                  canSpend={canEdit && !statPointsLocked && local.counters.some((c) => isSkillPointCounter(c.name))}
+                  researcherMode={researcherMode}
+                  canSetInfinity={canEdit && researcherMode}
+                  onUpdate={(p) => updateStat(stat.id, p)}
+                  onRemove={() => removeStat(stat.id)}
+                  onSpendPoint={(d) => spendSkillPointOnStat(stat.id, d)}
+                />
+              ))
+            )}
             {activeStats.length === 0 && (
               <p className="text-xs text-vng-muted text-center py-2 col-span-full">Нет характеристик</p>
             )}
@@ -1828,5 +1847,126 @@ function StatRow({
         </>
       )}
     </div>
+  )
+}
+
+function OldFriendStatsBlock({
+  stats,
+  onUpdate,
+  readOnly,
+}: {
+  stats: StatField[]
+  onUpdate: (id: string, patch: Partial<StatField>) => void
+  readOnly?: boolean
+}) {
+  return (
+    <>
+      {stats.map((stat) => {
+        const val = Number(stat.value) || 0
+        return (
+          <div key={stat.id} className="vng-stat-tile flex flex-col items-center p-2 rounded bg-vng-bg border border-vng-border">
+            <span className="text-xs uppercase text-vng-muted font-bold mb-2">{stat.name}</span>
+            <div className="flex items-center gap-2">
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => onUpdate(stat.id, { value: String(Math.max(-1, val - 1)) })}
+                  disabled={val <= -1}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-vng-elevated border border-vng-border hover:bg-vng-border disabled:opacity-50"
+                >
+                  -
+                </button>
+              )}
+              <span className="text-xl font-bold text-vng-amber w-8 text-center vng-mono">
+                {stat.value || '0'}
+              </span>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => onUpdate(stat.id, { value: String(Math.min(1, val + 1)) })}
+                  disabled={val >= 1}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-vng-elevated border border-vng-border hover:bg-vng-border disabled:opacity-50"
+                >
+                  +
+                </button>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
+function OldFriendSpellsBlock({
+  spells = [],
+  confirmed,
+  onUpdateSpells,
+  onConfirm,
+  readOnly,
+  gmEditing,
+}: {
+  spells?: SpecialSpellSlot[]
+  confirmed?: boolean
+  onUpdateSpells: (spells: SpecialSpellSlot[]) => void
+  onConfirm: () => void
+  readOnly?: boolean
+  gmEditing?: boolean
+}) {
+  const currentSpells = spells.length === 7 ? spells : Array.from({ length: 7 }).map((_, i) => ({
+    level: i + 1,
+    text: spells[i]?.text || '',
+    unlocked: !!spells[i]?.unlocked,
+  }))
+  const unlockedCount = currentSpells.filter((s) => s.unlocked).length
+
+  return (
+    <section className="mt-4 mb-4">
+      <div className="flex flex-col gap-2 p-3 border border-vng-border bg-vng-bg/60 rounded-lg">
+        <h3 className="text-sm uppercase tracking-wide text-vng-muted font-bold">
+          Заклинания (выбрано {unlockedCount} из 4)
+        </h3>
+        {currentSpells.map((spell, i) => (
+          <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center py-1">
+            <label className="flex items-center gap-2 w-full sm:w-1/4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={spell.unlocked}
+                disabled={readOnly || (confirmed && !gmEditing) || (!spell.unlocked && unlockedCount >= 4 && !gmEditing)}
+                onChange={(e) => {
+                  const next = [...currentSpells]
+                  next[i] = { ...next[i], unlocked: e.target.checked }
+                  onUpdateSpells(next)
+                }}
+                className="w-4 h-4 bg-vng-elevated border-vng-border rounded cursor-pointer"
+              />
+              <span className={`text-xs font-semibold ${spell.unlocked ? 'text-vng-amber' : 'text-vng-muted'}`}>
+                Слот {i + 1}
+              </span>
+            </label>
+            <input
+              className="flex-1 w-full bg-vng-elevated text-sm border border-vng-border rounded px-2 py-1.5 focus:border-vng-amber/40 focus:outline-none"
+              value={spell.text}
+              placeholder={`Заклинание ${i + 1}...`}
+              readOnly={readOnly || (!spell.unlocked && !gmEditing)}
+              onChange={(e) => {
+                const next = [...currentSpells]
+                next[i] = { ...next[i], text: e.target.value }
+                onUpdateSpells(next)
+              }}
+            />
+          </div>
+        ))}
+        <div className="flex justify-end mt-2 pt-2 border-t border-vng-border/60">
+          <Button
+            type="button"
+            disabled={readOnly || (!confirmed && unlockedCount !== 4)}
+            onClick={onConfirm}
+          >
+            {confirmed ? 'Разблокировать выбор' : 'Подтвердить выбор (4 заклинания)'}
+          </Button>
+        </div>
+      </div>
+    </section>
   )
 }
