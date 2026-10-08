@@ -81,11 +81,6 @@ function isAbilitiesField(name: string): boolean {
   return name.trim().toLowerCase() === 'способности'
 }
 
-function isInventoryLikeField(name: string): boolean {
-  const normalized = String(name ?? '').trim().toLowerCase()
-  return normalized === 'инвентарь' || normalized.includes('мешочек') || normalized === 'кпк'
-}
-
  function getTextFieldMaxLength(
    presetId: SheetPresetId | null,
    fieldName: string
