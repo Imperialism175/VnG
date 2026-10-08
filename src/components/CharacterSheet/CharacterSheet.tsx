@@ -86,17 +86,15 @@ function isInventoryLikeField(name: string): boolean {
   return normalized === 'инвентарь' || normalized.includes('мешочек') || normalized === 'кпк'
 }
 
-function getTextFieldMaxLength(
-  presetId: SheetPresetId | null,
-  fieldName: string
-): number | null {
-  const normalized = String(fieldName ?? '').trim().toLowerCase()
-  if (presetId === 'engineer' && normalized === 'кпк') return 45
-  if (presetId === 'npc-vessel-deltarune' && isInventoryLikeField(fieldName)) return 20
-  if (presetId === 'overcomer' && normalized === 'кузница вдохновения') return 25
-  if (isInventoryLikeField(fieldName)) return 30
-  return null
-}
+ function getTextFieldMaxLength(
+   presetId: SheetPresetId | null,
+   fieldName: string
+ ): number | null {
+   const normalized = String(fieldName ?? '').trim().toLowerCase()
+   if (presetId === 'engineer' && normalized === 'кпк') return 45
+   if (presetId === 'overcomer' && normalized === 'кузница вдохновения') return 25
+   return null
+ }
 
 function isEnergyStat(name: string): boolean {
   return String(name ?? '').trim().toLowerCase() === 'энергия'
