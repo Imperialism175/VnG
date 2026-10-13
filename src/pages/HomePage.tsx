@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Crown, DoorOpen, Network, RefreshCw, Server, Users } from 'lucide-react'
+import { Crown, DoorOpen, Network, RefreshCw, Server, Star, Users } from 'lucide-react'
 import { apiCreateRoom, apiJoinRoom, apiListRooms, type RoomSummary } from '@/lib/api'
 import { APP_VERSION } from '@/lib/appVersion'
 import { checkServerOnline, getServerHost, setServerHost } from '@/lib/runtime'
 import { getOrCreatePlayerId, saveSession } from '@/lib/utils'
 import { Button, Input } from '@/components/ui/Button'
+import { PremiumModal } from '@/components/Premium/PremiumModal'
 
 type Mode = 'choose' | 'create' | 'join' | 'invite'
 const ARCADE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('')
@@ -45,6 +46,7 @@ export function HomePage() {
   const [serverOnline, setServerOnline] = useState<boolean | null>(null)
   const [rooms, setRooms] = useState<RoomSummary[]>([])
   const [roomsLoading, setRoomsLoading] = useState(false)
+  const [premiumOpen, setPremiumOpen] = useState(false)
 
   useEffect(() => {
     checkServerOnline().then(setServerOnline)
@@ -184,6 +186,13 @@ export function HomePage() {
                 <div className="text-xs opacity-80 font-normal">Выбрать из списка сессий</div>
               </div>
             </Button>
+            <Button size="lg" variant="secondary" className="vng-home-action w-full justify-start" onClick={() => setPremiumOpen(true)}>
+              <Star size={20} className="text-yellow-400" />
+              <div className="text-left">
+                <div className="font-bold">VNG Premium</div>
+                <div className="text-xs opacity-80 font-normal">Желания и премиум-статус</div>
+              </div>
+            </Button>
           </div>
         )}
 
@@ -297,6 +306,14 @@ export function HomePage() {
           </div>
         )}
       </main>
+      {premiumOpen && (
+        <PremiumModal
+          onClose={() => setPremiumOpen(false)}
+          playerId={getOrCreatePlayerId()}
+          playerName={normalizeArcadeNick(playerName)}
+          isAdmin={getOrCreatePlayerId() === import.meta.env.VITE_VNG_ADMIN_ID}
+        />
+      )}
     </div>
   )
 }

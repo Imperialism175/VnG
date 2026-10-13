@@ -17,7 +17,6 @@ interface RoomHudProps {
   onToggleTheme?: () => void
   calculatorOpen?: boolean
   onToggleCalculator?: () => void
-  onTogglePremium: () => void
 }
 
 export function RoomHud({
@@ -36,7 +35,6 @@ export function RoomHud({
   onToggleTheme,
   calculatorOpen,
   onToggleCalculator,
-  onTogglePremium,
 }: RoomHudProps) {
   return (
     <header className="vng-retro-header vng-dos-hud vng-premium-hero shrink-0 z-40" aria-label="Панель сессии">
@@ -97,9 +95,6 @@ export function RoomHud({
                 {copied ? 'Скопировано' : 'Пригласить'}
               </button>
             )}
-            <button type="button" onClick={onTogglePremium} className="vng-tui-btn vng-tui-btn--ghost text-xs">
-              [ PREMIUM ]
-            </button>
             <Button size="sm" variant="ghost" onClick={onLeave} className="shrink-0">
               Выйти
             </Button>
