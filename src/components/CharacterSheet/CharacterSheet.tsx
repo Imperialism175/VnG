@@ -257,7 +257,10 @@ function parseDaredevilAbilityLevels(value: string): Record<string, string> {
     let chunk = src.slice(current.contentStart, end)
     if (chunk.startsWith('\n')) chunk = chunk.slice(1)
     if (chunk.endsWith('\n')) chunk = chunk.slice(0, -1)
-    if (hasLegacyTemplate(chunk)) chunk = ''
+    if (hasLegacyTemplate(chunk)) {
+      const legacyStart = chunk.search(/(?:^|\n)[ \t]*ур(?:овень)?\s*1\s*:/i)
+      chunk = chunk.slice(0, Math.max(0, legacyStart)).replace(/\n+$/, '')
+    }
     result[current.key] = chunk
   }
   return result

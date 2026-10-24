@@ -211,6 +211,7 @@ function ensureAbilityLevelsTextForPreset(textFields, sheetPresetId, classStatus
       }
     }
     const src = String(field?.value ?? '').trim()
+    if (/ур(?:овень)?\s*20/i.test(src) || /ур(?:овень)?\s*7-1/i.test(src)) return field
     if (/ур(?:овень)?\s*1/i.test(src) || /\blvl\s*1\b/i.test(src)) return field
     const prefix = src ? `${src}\n\n` : ''
     return {
