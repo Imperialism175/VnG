@@ -18,6 +18,7 @@ interface RoomHudProps {
   calculatorOpen?: boolean
   onToggleCalculator?: () => void
   onTogglePremium: () => void
+  onChangeNick?: () => void
 }
 
 export function RoomHud({
@@ -37,6 +38,7 @@ export function RoomHud({
   calculatorOpen,
   onToggleCalculator,
   onTogglePremium,
+  onChangeNick,
 }: RoomHudProps) {
   return (
     <header className="vng-retro-header vng-dos-hud vng-premium-hero shrink-0 z-40" aria-label="Панель сессии">
@@ -70,7 +72,18 @@ export function RoomHud({
           <span className="vng-dos-hud__sep" aria-hidden>│</span>
           <div className="vng-dos-hud__pair min-w-0">
             <span className="vng-dos-hud__label">Вы</span>
-            <span className="vng-dos-hud__value truncate max-w-[10rem]">{playerName}</span>
+            {onChangeNick ? (
+              <button
+                type="button"
+                onClick={onChangeNick}
+                className="vng-dos-hud__value truncate max-w-[10rem] underline decoration-dotted underline-offset-2 hover:text-vng-amber"
+                title="Сменить ник"
+              >
+                {playerName} ✎
+              </button>
+            ) : (
+              <span className="vng-dos-hud__value truncate max-w-[10rem]">{playerName}</span>
+            )}
           </div>
           {levelLabel ? (
             <>
