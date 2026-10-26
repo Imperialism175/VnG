@@ -32,7 +32,7 @@ import { mergeTheme } from '@/lib/theme'
 import { parseRoomExtras, type RoomExtrasState } from '@/lib/roomExtras'
 import { applyPublicState, normalizeCharacter, normalizeEncounter } from '@/lib/normalize'
 import { RoomSocket } from '@/lib/wsClient'
-import { generateId, saveSession } from '@/lib/utils'
+import { generateId, saveLastNick, saveSession } from '@/lib/utils'
 import { playPlayerSignalCue } from '@/lib/roomSounds'
 
 interface Session {
@@ -106,6 +106,7 @@ interface RoomContextValue {
   createNpcCharacter: (name: string) => void
   deleteNpcCharacter: (playerId: string) => void
   setHandRaised: (raised: boolean) => void
+  renamePlayer: (name: string) => void
   pingPlayer: (playerId: string) => void
 }
 
@@ -259,8 +260,10 @@ export function RoomProvider({
       if (me) {
         setSession((prev) => {
           const isGm = me.is_gm
-          if (prev.isGm === isGm) return prev
-          return applyGmSession(state.room.id, playerId, prev.playerName, isGm)
+          const name = me.name || prev.playerName
+          if (prev.isGm === isGm && prev.playerName === name) return prev
+          if (name !== prev.playerName) saveLastNick(name)
+          return applyGmSession(state.room.id, playerId, name, isGm)
         })
       }
 
@@ -448,6 +451,10 @@ export function RoomProvider({
 
   const setHandRaised = useCallback((raised: boolean) => {
     socketRef.current?.send({ type: 'SET_HAND_RAISED', raised })
+  }, [])
+
+  const renamePlayer = useCallback((name: string) => {
+    socketRef.current?.send({ type: 'RENAME_PLAYER', name })
   }, [])
 
   const pingPlayer = useCallback((playerId: string) => {
@@ -729,6 +736,7 @@ export function RoomProvider({
       rollDice,
       rerollInspired,
       setHandRaised,
+      renamePlayer,
       pingPlayer,
       sendChat,
       transferGm,
@@ -816,6 +824,7 @@ export function RoomProvider({
       createNpcCharacter,
       deleteNpcCharacter,
       setHandRaised,
+      renamePlayer,
       pingPlayer,
     ]
   )

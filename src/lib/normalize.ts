@@ -124,6 +124,7 @@ export type ClientMessage =
   | { type: 'SET_LEVEL_PRESET'; level_id: string | null; variant?: 'main' | 'alt' }
   | { type: 'SET_LEVEL_VISIBILITY'; show_to_players: boolean }
   | { type: 'SET_HAND_RAISED'; raised: boolean }
+  | { type: 'RENAME_PLAYER'; name: string }
   | { type: 'SET_DICE_PERMISSION'; player_id: string; allowed: boolean }
   | { type: 'PING_PLAYER'; player_id: string }
 

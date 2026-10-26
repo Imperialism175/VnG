@@ -932,6 +932,20 @@ wss.on('connection', (ws, req) => {
       broadcast(room, { type: 'CHARACTER_DELETED', player_id: targetId })
     }
 
+    if (msg.type === 'RENAME_PLAYER') {
+      const me = room.players.get(playerId)
+      if (!me) return
+      const nextName = normalizeArcadeName(msg.name)
+      if (me.name === nextName) return
+      me.name = nextName
+      const char = room.characters.get(playerId)
+      if (char) {
+        char.player_name = nextName
+        char.updated_at = new Date().toISOString()
+      }
+      broadcastState(room)
+    }
+
     if (msg.type === 'SET_HAND_RAISED') {
       if (player.is_gm) return
       initRoomPresence(room)

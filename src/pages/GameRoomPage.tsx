@@ -25,6 +25,7 @@ import { ThemeColorEditor } from '@/components/RoomTheme/ThemeColorEditor'
 import { FloatingCalculator } from '@/components/Calculator/FloatingCalculator'
 import { SecretCheatMenu } from '@/components/Calculator/SecretCheatMenu'
  import { PremiumModal } from '@/components/Premium/PremiumModal'
+import { ChangeNickModal } from '@/components/ArcadeNick/ChangeNickModal'
 import {
   effectiveGmUi,
   effectiveGmVision,
@@ -105,7 +106,7 @@ function GameRoomContent() {
     myCharacter, loading, connected, error, myTheme, music, activePoll, screenMessage, hallOfFame,
     stageFx,
     roomTheme,
-    saveCharacter, rollDice, rerollInspired, sendChat, transferGm,
+    saveCharacter, renamePlayer, rollDice, rerollInspired, sendChat, transferGm,
     adjustPlayerHp,
     adjustPlayerInspiration,
     setRoomTheme, clearPlayerTheme, setPersonalTheme, clearPersonalTheme,
@@ -124,6 +125,7 @@ function GameRoomContent() {
   const [dismissedScreenId, setDismissedScreenId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [premiumOpen, setPremiumOpen] = useState(false)
+  const [nickOpen, setNickOpen] = useState(false)
   const [themePanelOpen, setThemePanelOpen] = useState(false)
   const [calculatorOpen, setCalculatorOpen] = useState(false)
   const [cheatMenuOpen, setCheatMenuOpen] = useState(false)
@@ -468,6 +470,7 @@ function GameRoomContent() {
         calculatorOpen={calculatorOpen}
         onToggleCalculator={() => setCalculatorOpen((v) => !v)}
         onTogglePremium={() => setPremiumOpen((v) => !v)}
+        onChangeNick={() => setNickOpen(true)}
       />
 
       {themePanelOpen && (
@@ -652,6 +655,13 @@ function GameRoomContent() {
         }}
       />
       <SecretCheatMenu open={cheatMenuOpen} onClose={() => setCheatMenuOpen(false)} />
+      {nickOpen && (
+        <ChangeNickModal
+          currentName={session.playerName}
+          onSave={renamePlayer}
+          onClose={() => setNickOpen(false)}
+        />
+      )}
       {premiumOpen && (
         <PremiumModal
           onClose={() => setPremiumOpen(false)}

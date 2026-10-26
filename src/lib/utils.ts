@@ -50,6 +50,22 @@ export function loadSession(): { playerId: string; name: string; roomId: string;
   }
 }
 
+export function loadLastNick(): string | null {
+  try {
+    return localStorage.getItem('vng_last_nick')
+  } catch {
+    return null
+  }
+}
+
+export function saveLastNick(nick: string) {
+  try {
+    localStorage.setItem('vng_last_nick', nick)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function clearSession() {
   localStorage.removeItem('vng_session')
 }
