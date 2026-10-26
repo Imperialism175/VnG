@@ -15,9 +15,8 @@ import {
 
 const CHEAT_DICE: { sides: CheatDieSides; label: string }[] = [
   { sides: 4, label: 'd4' },
+  { sides: 5, label: 'd5' },
   { sides: 6, label: 'd6' },
-  { sides: 8, label: 'd8' },
-  { sides: 10, label: 'd10' },
   { sides: 12, label: 'd12' },
   { sides: 20, label: 'd20' },
   { sides: 100, label: 'd100' },

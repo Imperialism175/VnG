@@ -30,7 +30,13 @@ import { syncLegacyHp } from '@/lib/encounterUtils'
 import { createDefaultCounters, ensureAbilityLevelFields, ensureSpecialTextFields } from '@/lib/characterSheets'
 import { mergeTheme } from '@/lib/theme'
 import { parseRoomExtras, type RoomExtrasState } from '@/lib/roomExtras'
-import { applyPublicState, normalizeCharacter, normalizeEncounter } from '@/lib/normalize'
+import {
+  applyPublicState,
+  normalizeCharacter,
+  normalizeEncounter,
+  type ClientMessage,
+  type ServerMessage,
+} from '@/lib/normalize'
 import { RoomSocket } from '@/lib/wsClient'
 import { generateId, saveSession } from '@/lib/utils'
 import { playPlayerSignalCue } from '@/lib/roomSounds'
@@ -89,7 +95,14 @@ interface RoomContextValue {
   clearPlayerTheme: (playerId: string) => void
   setPersonalTheme: (theme: RoomTheme) => void
   clearPersonalTheme: () => void
-  setMusic: (url: string | null, playing: boolean) => void
+  setMusic: (url: string | null, playing: boolean, meta?: MusicTrackMeta) => void
+  musicControl: (
+    action: 'pause' | 'resume' | 'seek' | 'repeat',
+    opts?: { position?: number; repeatOne?: boolean }
+  ) => void
+  /** Прямой доступ к сокету для модулей со своим протоколом (доска) */
+  sendRoomMessage: (msg: ClientMessage) => void
+  subscribeRoomMessages: (handler: (msg: ServerMessage) => void) => () => void
   startPoll: (question: string, options: string[], durationSec?: number) => void
   castVote: (optionId: string) => void
   endPoll: () => void
@@ -107,6 +120,14 @@ interface RoomContextValue {
   deleteNpcCharacter: (playerId: string) => void
   setHandRaised: (raised: boolean) => void
   pingPlayer: (playerId: string) => void
+}
+
+export interface MusicTrackMeta {
+  position?: number
+  title?: string
+  author?: string | null
+  thumbnailUrl?: string | null
+  repeatOne?: boolean
 }
 
 const RoomContext = createContext<RoomContextValue | null>(null)
@@ -197,17 +218,7 @@ export function RoomProvider({
   const [activeEncounter, setActiveEncounter] = useState<Encounter | null>(null)
   const [roomTheme, setRoomThemeState] = useState<RoomTheme>(() => parseRoomExtras({}).roomTheme)
   const [playerThemes, setPlayerThemes] = useState<Record<string, RoomTheme>>({})
-  const [music, setMusicState] = useState<RoomMusic>({
-    url: null,
-    video_id: null,
-    playing: false,
-    title: null,
-    volume: 70,
-    source: null,
-    stream_token: null,
-    use_host_proxy: true,
-    proxy_error: null,
-  })
+  const [music, setMusicState] = useState<RoomMusic>(() => parseRoomExtras({}).music)
   const [activePoll, setActivePoll] = useState<RoomPoll | null>(null)
   const [screenMessage, setScreenMessage] = useState<ScreenMessage | null>(null)
   const [hallOfFame, setHallOfFameState] = useState<HallOfFame>(() => parseRoomExtras({}).hallOfFame)
@@ -583,8 +594,46 @@ export function RoomProvider({
     socketRef.current?.send(withCheatGm({ type: 'DELETE_NPC_CHARACTER', player_id: playerId }))
   }, [])
 
-  const updateMusic = useCallback((url: string | null, playing: boolean) => {
-    socketRef.current?.send(withCheatGm({ type: 'SET_MUSIC', url, playing }))
+  const updateMusic = useCallback((url: string | null, playing: boolean, meta?: MusicTrackMeta) => {
+    socketRef.current?.send(
+      withCheatGm({
+        type: 'SET_MUSIC',
+        url,
+        playing,
+        ...(meta?.position ? { position: meta.position } : {}),
+        ...(meta?.title ? { title: meta.title } : {}),
+        ...(meta?.author ? { author: meta.author } : {}),
+        ...(meta?.thumbnailUrl ? { thumbnail_url: meta.thumbnailUrl } : {}),
+        ...(meta?.repeatOne !== undefined ? { repeat_one: meta.repeatOne } : {}),
+      })
+    )
+  }, [])
+
+  const musicControl = useCallback(
+    (action: 'pause' | 'resume' | 'seek' | 'repeat', opts?: { position?: number; repeatOne?: boolean }) => {
+      socketRef.current?.send(
+        withCheatGm({
+          type: 'MUSIC_CONTROL',
+          action,
+          ...(opts?.position !== undefined ? { position: opts.position } : {}),
+          ...(opts?.repeatOne !== undefined ? { repeat_one: opts.repeatOne } : {}),
+        })
+      )
+    },
+    []
+  )
+
+  const sendRoomMessage = useCallback((msg: ClientMessage) => {
+    socketRef.current?.send(withCheatGm(msg as unknown as Record<string, unknown>) as unknown as ClientMessage)
+  }, [])
+
+  const subscribeRoomMessages = useCallback((handler: (msg: ServerMessage) => void) => {
+    const socket = socketRef.current
+    if (!socket) return () => {}
+    const unsub = socket.onMessage(handler)
+    return () => {
+      unsub()
+    }
   }, [])
 
   const startPoll = useCallback((question: string, options: string[], durationSec?: number) => {
@@ -745,6 +794,9 @@ export function RoomProvider({
       setLevelPreset,
       setShowLevelToPlayers,
       setMusic: updateMusic,
+      musicControl,
+      sendRoomMessage,
+      subscribeRoomMessages,
       startPoll,
       castVote,
       endPoll,
@@ -803,6 +855,9 @@ export function RoomProvider({
       setLevelPreset,
       setShowLevelToPlayers,
       updateMusic,
+      musicControl,
+      sendRoomMessage,
+      subscribeRoomMessages,
       startPoll,
       castVote,
       endPoll,

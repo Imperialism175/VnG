@@ -6,11 +6,39 @@ export const DEFAULT_THEME = {
   bg: '#000000',
 }
 
+export function createEmptyMusic(prev = null) {
+  return {
+    url: null,
+    video_id: null,
+    playing: false,
+    paused: false,
+    title: null,
+    author: null,
+    thumbnail_url: null,
+    volume: 70,
+    source: null,
+    stream_token: null,
+    use_host_proxy: true,
+    proxy_error: null,
+    position_sec: 0,
+    started_at: null,
+    repeat_one: Boolean(prev?.repeat_one),
+    sync_seq: Number(prev?.sync_seq ?? 0) + 1,
+  }
+}
+
+/** Текущая позиция трека в секундах (по часам сервера) */
+export function musicPositionNow(music, now = Date.now()) {
+  const base = Math.max(0, Number(music?.position_sec) || 0)
+  if (!music?.playing || !Number.isFinite(Number(music?.started_at))) return base
+  return base + Math.max(0, now - Number(music.started_at)) / 1000
+}
+
 export function createRoomExtras() {
   return {
     theme: { ...DEFAULT_THEME },
     playerThemes: {},
-    music: { url: null, video_id: null, playing: false, title: null, volume: 70, source: null, stream_token: null, use_host_proxy: true, proxy_error: null },
+    music: createEmptyMusic(),
     activePoll: null,
     screenMessage: null,
     hallOfFame: { title: 'ЗАЛ СЛАВЫ', entries: [] },
@@ -138,7 +166,7 @@ export function serializeRoomExtras(room) {
   return {
     room_theme: room.theme,
     player_themes: room.playerThemes,
-    music: room.music,
+    music: { ...room.music, server_time: Date.now() },
     active_poll: room.activePoll,
     screen_message: room.screenMessage,
     hall_of_fame: room.hallOfFame,

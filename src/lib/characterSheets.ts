@@ -584,7 +584,6 @@ export const SHEET_PRESETS: SheetPresetDef[] = [
         hp: { current: 1, max: 1 },
         classStatus: 'Лист Сорвиголовы',
         skillPoints: 23,
-        extraStats: [stat('УРОВЕНЬ', '20')],
         textValues: {
           Инвентарь: 'Крестик',
           Способности:

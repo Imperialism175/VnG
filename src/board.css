@@ -1,0 +1,199 @@
+/* Школьная доска комнаты */
+
+.vng-board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+.vng-board__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vng-board__group {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border: 1px solid var(--vng-dos-muted, #006600);
+}
+
+.vng-board__group--gm {
+  margin-left: auto;
+}
+
+.vng-board__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: transparent;
+  color: var(--vng-dos-fg, #33ff33);
+  cursor: pointer;
+}
+
+.vng-board__tool svg {
+  display: inline-block !important;
+}
+
+.vng-board__tool:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vng-dos-fg, #33ff33) 14%, transparent);
+}
+
+.vng-board__tool--on {
+  background: var(--vng-dos-fg, #33ff33) !important;
+  color: var(--vng-dos-bg, #000000);
+}
+
+.vng-board__tool--danger:hover:not(:disabled) {
+  background: #c92a2a !important;
+  color: #fff;
+}
+
+.vng-board__tool:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.vng-board__dot {
+  display: block;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.vng-board__swatch {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.vng-board__swatch--on {
+  border-color: var(--vng-dos-fg, #33ff33);
+  transform: scale(1.12);
+}
+
+.vng-board__swatch:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.vng-board__select {
+  height: 2rem;
+  padding: 0 0.4rem;
+  border: none;
+  background: var(--vng-dos-bg, #000000);
+  color: var(--vng-dos-fg, #33ff33);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.vng-board__notice {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--vng-dos-muted, #006600);
+}
+
+.vng-board__stage {
+  flex: 1;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vng-board__frame {
+  position: relative;
+  flex-shrink: 0;
+  /* Деревянная рама */
+  outline: 10px solid #6b4a2b;
+  outline-offset: 0;
+  box-shadow: 0 0 0 11px #4a321c, 0 10px 30px rgba(0, 0, 0, 0.55);
+  margin-top: 11px;
+}
+
+.vng-board__canvas {
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.vng-board__canvas--text {
+  cursor: text;
+}
+
+.vng-board__canvas--eraser {
+  cursor: cell;
+}
+
+.vng-board__canvas--view {
+  cursor: default;
+}
+
+.vng-board__text-input {
+  position: absolute;
+  min-width: 10rem;
+  max-width: 60%;
+  padding: 0;
+  border: 1px dashed currentColor;
+  background: transparent;
+  font-family: "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive;
+  line-height: 1.2;
+  resize: none;
+  outline: none;
+  field-sizing: content;
+}
+
+.vng-board__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f5f5f0;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+/* Полочка с мелом и губкой */
+.vng-board__tray {
+  position: relative;
+  height: 10px;
+  margin-top: 11px;
+  background: linear-gradient(#7a5532, #5a3c22);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+.vng-board__chalk {
+  position: absolute;
+  bottom: 6px;
+  left: 12%;
+  width: 34px;
+  height: 7px;
+  border-radius: 3px;
+  background: #f5f5f0;
+}
+
+.vng-board__chalk--yellow {
+  left: calc(12% + 46px);
+  width: 26px;
+  background: #ffe066;
+}
+
+.vng-board__sponge {
+  position: absolute;
+  bottom: 6px;
+  right: 14%;
+  width: 52px;
+  height: 14px;
+  border-radius: 3px;
+  background: linear-gradient(#3b5bdb 55%, #f1f3f5 55%);
+}

@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import { BarChart3, Crown, Dices, Scroll, Trophy, Users } from 'lucide-react'
+import { BarChart3, Crown, Dices, Music, Presentation, Scroll, Trophy, Users } from 'lucide-react'
 
-export type PlayerTabId = 'sheet' | 'dice' | 'tops' | 'vote'
-export type GmTabId = 'players' | 'dice' | 'tops' | 'vote' | 'gm'
+export type PlayerTabId = 'sheet' | 'dice' | 'board' | 'tops' | 'vote'
+export type GmTabId = 'players' | 'dice' | 'board' | 'music' | 'tops' | 'vote' | 'gm'
 
 interface TabDef<T extends string> {
   id: T
@@ -60,6 +60,7 @@ export function PlayerTabBar({
   const tabs: TabDef<PlayerTabId>[] = [
     { id: 'sheet', label: 'Лист', hint: 'Свой и чужие листы', icon: <Scroll size={18} /> },
     { id: 'dice', label: 'Кубы', hint: 'Бросок кубов', icon: <Dices size={18} /> },
+    { id: 'board', label: 'Доска', hint: 'Общая доска для рисования', icon: <Presentation size={18} /> },
     { id: 'tops', label: 'Топ', hint: 'Рейтинг от мастера', icon: <Trophy size={18} /> },
   ]
   if (showVote) {
@@ -88,6 +89,8 @@ export function GmTabBar({
   const tabs: TabDef<GmTabId>[] = [
     { id: 'players', label: 'Игроки', hint: 'Листы и HP игроков', icon: <Users size={18} /> },
     { id: 'dice', label: 'Кубы', hint: 'Бросок кубов', icon: <Dices size={18} /> },
+    { id: 'music', label: 'Музыка', hint: 'Плеер и очередь треков', icon: <Music size={18} /> },
+    { id: 'board', label: 'Доска', hint: 'Общая доска для рисования', icon: <Presentation size={18} /> },
     { id: 'tops', label: 'Топ', hint: 'Ручной рейтинг', icon: <Trophy size={18} /> },
   ]
   if (showVote) {

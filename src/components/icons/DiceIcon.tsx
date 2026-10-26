@@ -37,6 +37,29 @@ export function DiceIcon({ sides, size = 28, className = '' }: DiceIconProps) {
             strokeLinejoin="round"
           />
         )
+      case 5:
+        return (
+          <polygon
+            points={`${s / 2},${s * 0.1} ${s * 0.88},${s * 0.4} ${s * 0.74},${s * 0.9} ${s * 0.26},${s * 0.9} ${s * 0.12},${s * 0.4}`}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={sw}
+            strokeLinejoin="round"
+          />
+        )
+      case 0:
+        return (
+          <text
+            x={s / 2}
+            y={s / 2}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={s * 0.62}
+            fill={stroke}
+          >
+            ∞
+          </text>
+        )
       case 6:
         return (
           <polygon

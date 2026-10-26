@@ -140,7 +140,8 @@ export interface Encounter {
   created_at?: string
 }
 
-export type DiceSides = 3 | 4 | 5 | 6 | 8 | 10 | 12 | 20 | 100
+/** 0 — D∞: диапазон мин/макс задаёт игрок */
+export type DiceSides = 0 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 20 | 100
 
 export interface DiceRollResult {
   expression: string
@@ -174,12 +175,46 @@ export interface RoomMusic {
   url: string | null
   video_id: string | null
   playing: boolean
+  /** Трек на паузе: url сохранён, позиция в position_sec */
+  paused: boolean
   title: string | null
+  author: string | null
+  thumbnail_url: string | null
   volume: number
   source: 'youtube' | 'direct' | null
   stream_token: string | null
   use_host_proxy: boolean
   proxy_error: string | null
+  /** Позиция трека (сек) на момент started_at */
+  position_sec: number
+  /** Когда сервер запустил трек с position_sec (мс, часы сервера) */
+  started_at: number | null
+  repeat_one: boolean
+  /** Растёт при перемотке/продолжении — клиенты пересинхронизируют позицию */
+  sync_seq: number
+  /** Сколько секунд прошло на треке в момент, когда клиент получил состояние */
+  position_at_receive: number
+  /** Date.now() клиента в момент получения состояния */
+  received_at: number
+}
+
+export interface BoardStroke {
+  id: string
+  player_id: string
+  tool: 'pen' | 'line' | 'rect' | 'ellipse' | 'text'
+  color: string
+  width: number
+  /** x0, y0, x1, y1, … в долях холста 0..1 */
+  points: number[]
+  text?: string
+}
+
+export type BoardBackground = 'chalk' | 'white' | 'grid'
+
+export interface BoardState {
+  strokes: BoardStroke[]
+  locked: boolean
+  background: BoardBackground
 }
 
 export interface PollOption {
