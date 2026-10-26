@@ -1,4 +1,7 @@
 import type {
+  BoardBackground,
+  BoardState,
+  BoardStroke,
   Character,
   ChatMessage,
   CounterField,
@@ -51,6 +54,9 @@ export type ServerMessage =
   | { type: 'ROOM_EXTRAS_UPDATE'; extras: Record<string, unknown> }
   | { type: 'PRESENCE_UPDATE'; hands_raised: string[]; dice_allowed: string[] }
   | { type: 'PLAYER_SIGNAL'; target_player_id: string; from_player_id: string; from_name: string }
+  | { type: 'BOARD_STATE'; board: BoardState }
+  | { type: 'BOARD_STROKE'; stroke: BoardStroke }
+  | { type: 'BOARD_REMOVE'; ids: string[] }
   | { type: 'ERROR'; message: string }
 
 export type ClientMessage =
@@ -100,7 +106,22 @@ export type ClientMessage =
   | { type: 'SET_PLAYER_THEME'; theme: RoomTheme }
   | { type: 'CLEAR_MY_THEME' }
   | { type: 'CLEAR_PLAYER_THEME'; target_player_id: string }
-  | { type: 'SET_MUSIC'; url?: string | null; playing?: boolean }
+  | {
+      type: 'SET_MUSIC'
+      url?: string | null
+      playing?: boolean
+      position?: number
+      title?: string
+      author?: string
+      thumbnail_url?: string
+      repeat_one?: boolean
+    }
+  | { type: 'MUSIC_CONTROL'; action: 'pause' | 'resume' | 'seek' | 'repeat'; position?: number; repeat_one?: boolean }
+  | { type: 'BOARD_REQUEST' }
+  | { type: 'BOARD_STROKE'; stroke: BoardStroke }
+  | { type: 'BOARD_REMOVE'; ids: string[] }
+  | { type: 'BOARD_CLEAR' }
+  | { type: 'BOARD_OPTIONS'; locked?: boolean; background?: BoardBackground }
   | { type: 'START_POLL'; question: string; options: string[]; duration_sec?: number }
   | { type: 'CAST_VOTE'; option_id: string }
   | { type: 'END_POLL' }

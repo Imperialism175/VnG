@@ -21,16 +21,19 @@ export function parseYoutubeVideoId(url: string): string | null {
   return null
 }
 
-export function youtubeEmbedUrl(videoId: string, autoplay: boolean, origin?: string) {
+export function youtubeThumbnailUrl(videoId: string) {
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+}
+
+export function youtubeEmbedUrl(videoId: string, autoplay: boolean, origin?: string, startSec = 0) {
   const params = new URLSearchParams({
     autoplay: autoplay ? '1' : '0',
-    loop: '1',
-    playlist: videoId,
     rel: '0',
     modestbranding: '1',
     enablejsapi: '1',
     playsinline: '1',
   })
   if (origin) params.set('origin', origin)
+  if (startSec >= 1) params.set('start', String(Math.floor(startSec)))
   return `https://www.youtube.com/embed/${videoId}?${params}`
 }

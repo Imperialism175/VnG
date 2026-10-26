@@ -844,3 +844,147 @@ export async function fetchPlaylistEntries(url, cursor = '') {
   }
 }
 
+
+function readRunsText(node) {
+  if (!node) return ''
+  if (typeof node.simpleText === 'string') return node.simpleText
+  if (Array.isArray(node.runs)) return node.runs.map((r) => String(r?.text ?? '')).join('')
+  return ''
+}
+
+function parseDurationText(text) {
+  const parts = String(text ?? '').trim().split(':').map((p) => Number(p))
+  if (!parts.length || parts.some((n) => !Number.isFinite(n))) return null
+  return parts.reduce((acc, n) => acc * 60 + n, 0)
+}
+
+function collectSearchVideos(node, out, limit) {
+  if (!node || typeof node !== 'object' || out.length >= limit) return
+  if (Array.isArray(node)) {
+    for (const item of node) collectSearchVideos(item, out, limit)
+    return
+  }
+  const video = node.videoRenderer
+  if (video?.videoId) {
+    const videoId = String(video.videoId)
+    if (!out.some((e) => e.id === videoId)) {
+      const lengthText = readRunsText(video.lengthText)
+      out.push({
+        id: videoId,
+        title: readRunsText(video.title).trim().slice(0, 200) || 'Трек',
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        thumbnail_url: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        author: readRunsText(video.ownerText ?? video.longBylineText).trim().slice(0, 120) || null,
+        duration_sec: parseDurationText(lengthText),
+      })
+    }
+    return
+  }
+  for (const value of Object.values(node)) collectSearchVideos(value, out, limit)
+}
+
+async function searchViaDataApi(query, limit) {
+  const params = new URLSearchParams({
+    key: YOUTUBE_API_KEY,
+    part: 'snippet',
+    type: 'video',
+    maxResults: String(limit),
+    q: query,
+  })
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`)
+  if (!res.ok) return []
+  const data = await res.json()
+  return (Array.isArray(data?.items) ? data.items : [])
+    .map((item) => {
+      const videoId = String(item?.id?.videoId ?? '').trim()
+      if (!videoId) return null
+      return {
+        id: videoId,
+        title: htmlEntityDecode(String(item?.snippet?.title ?? 'Трек')).slice(0, 200),
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        thumbnail_url: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        author: htmlEntityDecode(String(item?.snippet?.channelTitle ?? '')).slice(0, 120) || null,
+        duration_sec: null,
+      }
+    })
+    .filter(Boolean)
+}
+
+/** Поиск треков на YouTube для плеера ГМа */
+export async function searchYoutubeTracks(query, limit = 20) {
+  const q = String(query ?? '').trim().slice(0, 200)
+  if (!q) return { error: 'Пустой запрос', entries: [] }
+  try {
+    const res = await fetch('https://www.youtube.com/youtubei/v1/search?prettyPrint=false', {
+      method: 'POST',
+      headers: buildYoutubeRequestHeaders({
+        'Content-Type': 'application/json',
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': '2.20240601.00.00',
+        Origin: 'https://www.youtube.com',
+        Referer: 'https://www.youtube.com/',
+      }),
+      body: JSON.stringify({
+        context: { client: { clientName: 'WEB', clientVersion: '2.20240601.00.00', hl: 'ru', gl: 'US' } },
+        query: q,
+        // Фильтр «только видео»
+        params: 'EgIQAQ%3D%3D',
+      }),
+    })
+    if (res.ok) {
+      const payload = await res.json()
+      const out = []
+      collectSearchVideos(payload?.contents ?? payload, out, limit)
+      if (out.length) return { error: null, entries: out }
+    }
+  } catch {
+    /* попробуем Data API */
+  }
+  if (YOUTUBE_API_KEY) {
+    const entries = await searchViaDataApi(q, limit).catch(() => [])
+    if (entries.length) return { error: null, entries }
+  }
+  return { error: 'YouTube не ответил на поиск. Можно вставить ссылку на трек или плейлист.', entries: [] }
+}
+
+/** Название и обложка одного трека по ссылке */
+export async function fetchTrackInfo(url) {
+  const raw = String(url ?? '').trim()
+  const videoId = parseYoutubeVideoId(raw)
+  if (videoId) {
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`
+    let title = null
+    let author = null
+    try {
+      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`, {
+        headers: { 'User-Agent': 'VnG/1.0' },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        title = typeof data.title === 'string' ? data.title.trim().slice(0, 200) : null
+        author = typeof data.author_name === 'string' ? data.author_name.trim().slice(0, 120) : null
+      }
+    } catch {
+      /* без названия */
+    }
+    return {
+      id: videoId,
+      title: title ?? 'Трек YouTube',
+      url: watchUrl,
+      thumbnail_url: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      author,
+      duration_sec: null,
+    }
+  }
+  if (detectMusicSource(raw) === 'direct') {
+    return {
+      id: raw.slice(0, 120),
+      title: (await fetchMusicTitle(raw)) ?? 'Аудиофайл',
+      url: raw,
+      thumbnail_url: null,
+      author: null,
+      duration_sec: null,
+    }
+  }
+  return null
+}

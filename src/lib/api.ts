@@ -18,7 +18,9 @@ export interface PlaylistEntry {
   id: string
   title: string
   url: string
-  thumbnail_url?: string
+  thumbnail_url?: string | null
+  author?: string | null
+  duration_sec?: number | null
 }
 
 export interface PlaylistEntriesResponse {
@@ -66,4 +68,14 @@ export async function apiGetPlaylistEntries(url: string, cursor?: string) {
   const qs = new URLSearchParams({ url })
   if (cursor) qs.set('cursor', cursor)
   return apiFetch<PlaylistEntriesResponse>(`/api/music/playlist?${qs.toString()}`)
+}
+
+export async function apiSearchMusic(query: string) {
+  const qs = new URLSearchParams({ q: query })
+  return apiFetch<{ entries: PlaylistEntry[]; error: string | null }>(`/api/music/search?${qs.toString()}`)
+}
+
+export async function apiGetTrackInfo(url: string) {
+  const qs = new URLSearchParams({ url })
+  return apiFetch<{ entry: PlaylistEntry }>(`/api/music/info?${qs.toString()}`)
 }

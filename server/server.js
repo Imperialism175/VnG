@@ -21,16 +21,29 @@ import {
   startPoll,
   fetchYoutubeTitle,
   clampMusicVolume,
+  createEmptyMusic,
+  musicPositionNow,
 } from './roomExtras.js'
 import {
   detectMusicSource,
   fetchMusicTitle,
   fetchPlaylistEntries,
+  fetchTrackInfo,
+  searchYoutubeTracks,
   handleMusicStreamRequest,
   prepareRoomMusicStream,
   stopRoomMusic,
 } from './musicProxy.js'
 import { applyPlayerCounterPolicy } from './characterHp.js'
+import {
+  addStroke,
+  canDrawOnBoard,
+  clearBoard,
+  removeStrokes,
+  sanitizeStroke,
+  serializeBoard,
+  setBoardOptions,
+} from './board.js'
 import {
   initRoomPresence,
   serializePresence,
@@ -566,6 +579,28 @@ const httpServer = createServer(async (req, res) => {
         return
       }
       json(200, { entries: result.entries, next_cursor: result.next_cursor ?? null })
+      return
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/music/search') {
+      const q = String(url.searchParams.get('q') ?? '').trim()
+      if (!q) {
+        json(400, { error: 'Пустой запрос', entries: [] })
+        return
+      }
+      const result = await searchYoutubeTracks(q)
+      json(result.error ? 502 : 200, result)
+      return
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/music/info') {
+      const trackUrl = String(url.searchParams.get('url') ?? '').trim()
+      const info = trackUrl ? await fetchTrackInfo(trackUrl) : null
+      if (!info) {
+        json(400, { error: 'Нужна ссылка на YouTube или прямой аудиофайл' })
+        return
+      }
+      json(200, { entry: info })
       return
     }
 
@@ -1296,36 +1331,45 @@ wss.on('connection', (ws, req) => {
       const source = url ? detectMusicSource(url) : null
       const videoId = url ? parseYoutubeVideoId(url) : null
       const playing = Boolean(msg.playing && source)
+      const startPosition = Math.max(0, Math.min(24 * 3600, Number(msg.position) || 0))
+      const hintTitle = typeof msg.title === 'string' ? msg.title.trim().slice(0, 200) : ''
+      const hintAuthor = typeof msg.author === 'string' ? msg.author.trim().slice(0, 120) : ''
+      const hintThumb =
+        typeof msg.thumbnail_url === 'string' && /^https:\/\//.test(msg.thumbnail_url)
+          ? msg.thumbnail_url.slice(0, 500)
+          : null
 
       ;(async () => {
         if (!url || !playing) {
           stopRoomMusic(room.id)
-          room.music = {
-            url: null,
-            video_id: null,
-            playing: false,
-            title: null,
-            volume: 70,
-            source: null,
-            stream_token: null,
-            use_host_proxy: true,
-            proxy_error: null,
-          }
+          room.music = createEmptyMusic(room.music)
           broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
           return
         }
 
-        let title = room.music?.title ?? null
-        if (!title || url !== room.music?.url) {
+        const sameTrack = url === room.music?.url
+        let title = hintTitle || (sameTrack ? room.music?.title ?? null : null)
+        if (!title) {
           if (source === 'youtube' && videoId) {
-            title =
-              (await fetchYoutubeTitle(videoId)) ??
-              'Трек'
+            title = (await fetchYoutubeTitle(videoId)) ?? 'Трек'
           } else if (source === 'direct') {
             title = (await fetchMusicTitle(url)) ?? 'Аудиофайл'
           } else {
             title = 'Музыка'
           }
+        }
+        const meta = {
+          url,
+          video_id: videoId,
+          title: title ?? 'Музыка',
+          author: hintAuthor || (sameTrack ? room.music?.author ?? null : null),
+          thumbnail_url:
+            hintThumb ?? (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null),
+          volume: clampMusicVolume(msg.volume, room.music?.volume ?? 70),
+          repeat_one: msg.repeat_one !== undefined ? Boolean(msg.repeat_one) : Boolean(room.music?.repeat_one),
+          sync_seq: Number(room.music?.sync_seq ?? 0) + 1,
+          position_sec: startPosition,
+          paused: false,
         }
 
         // YouTube plays directly in clients via embed mode.
@@ -1333,11 +1377,9 @@ wss.on('connection', (ws, req) => {
         if (source === 'youtube' && videoId) {
           stopRoomMusic(room.id)
           room.music = {
-            url,
-            video_id: videoId,
+            ...meta,
             playing: true,
-            title: title ?? 'Трек',
-            volume: clampMusicVolume(msg.volume, room.music?.volume ?? 70),
+            started_at: Date.now(),
             source,
             stream_token: null,
             use_host_proxy: false,
@@ -1351,11 +1393,9 @@ wss.on('connection', (ws, req) => {
         if (!prep.ok) {
           stopRoomMusic(room.id)
           room.music = {
-            url,
-            video_id: videoId,
+            ...meta,
             playing: false,
-            title: title ?? 'Музыка',
-            volume: clampMusicVolume(msg.volume, room.music?.volume ?? 70),
+            started_at: null,
             source,
             stream_token: null,
             use_host_proxy: true,
@@ -1366,11 +1406,9 @@ wss.on('connection', (ws, req) => {
         }
 
         room.music = {
-          url,
-          video_id: videoId,
+          ...meta,
           playing: true,
-          title: title ?? 'Музыка',
-          volume: clampMusicVolume(msg.volume, room.music?.volume ?? 70),
+          started_at: Date.now(),
           source: prep.source,
           stream_token: prep.streamToken,
           use_host_proxy: true,
@@ -1378,6 +1416,62 @@ wss.on('connection', (ws, req) => {
         }
         broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
       })()
+    }
+
+    if (msg.type === 'MUSIC_CONTROL' && actorIsGm(player, msg) && room.music?.url) {
+      const m = room.music
+      const now = Date.now()
+      if (msg.action === 'pause' && m.playing) {
+        room.music = { ...m, position_sec: musicPositionNow(m, now), started_at: null, playing: false, paused: true }
+      } else if (msg.action === 'resume' && m.paused) {
+        room.music = { ...m, playing: true, paused: false, started_at: now, sync_seq: Number(m.sync_seq ?? 0) + 1 }
+      } else if (msg.action === 'seek') {
+        const pos = Math.max(0, Math.min(24 * 3600, Number(msg.position) || 0))
+        room.music = {
+          ...m,
+          position_sec: pos,
+          started_at: m.playing ? now : null,
+          sync_seq: Number(m.sync_seq ?? 0) + 1,
+        }
+      } else if (msg.action === 'repeat') {
+        room.music = { ...m, repeat_one: Boolean(msg.repeat_one) }
+      } else {
+        return
+      }
+      broadcast(room, { type: 'ROOM_EXTRAS_UPDATE', extras: serializeRoomExtras(room) })
+    }
+
+    if (msg.type === 'BOARD_REQUEST') {
+      send(ws, { type: 'BOARD_STATE', board: serializeBoard(room) })
+    }
+
+    if (msg.type === 'BOARD_STROKE') {
+      const isGm = actorIsGm(player, msg)
+      if (!canDrawOnBoard(room, isGm)) {
+        send(ws, { type: 'ERROR', message: 'ГМ закрыл доску для рисования' })
+        return
+      }
+      const stroke = sanitizeStroke(msg.stroke, playerId)
+      if (stroke && addStroke(room, stroke)) {
+        broadcast(room, { type: 'BOARD_STROKE', stroke })
+      }
+    }
+
+    if (msg.type === 'BOARD_REMOVE') {
+      const isGm = actorIsGm(player, msg)
+      if (!canDrawOnBoard(room, isGm)) return
+      const removed = removeStrokes(room, msg.ids, playerId, isGm)
+      if (removed.length) broadcast(room, { type: 'BOARD_REMOVE', ids: removed })
+    }
+
+    if (msg.type === 'BOARD_CLEAR' && actorIsGm(player, msg)) {
+      clearBoard(room)
+      broadcast(room, { type: 'BOARD_STATE', board: serializeBoard(room) })
+    }
+
+    if (msg.type === 'BOARD_OPTIONS' && actorIsGm(player, msg)) {
+      setBoardOptions(room, { locked: msg.locked, background: msg.background })
+      broadcast(room, { type: 'BOARD_STATE', board: serializeBoard(room) })
     }
 
     if (msg.type === 'START_POLL' && actorIsGm(player, msg)) {

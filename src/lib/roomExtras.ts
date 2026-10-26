@@ -19,7 +19,7 @@ export interface RoomExtrasState {
 export const EMPTY_EXTRAS: RoomExtrasState = {
   roomTheme: DEFAULT_THEME,
   playerThemes: {},
-  music: { url: null, video_id: null, playing: false, title: null, volume: 70, source: null, stream_token: null, use_host_proxy: true, proxy_error: null },
+  music: normalizeMusic({}),
   activePoll: null,
   screenMessage: null,
   hallOfFame: { title: 'ЗАЛ СЛАВЫ', entries: [] },
@@ -48,17 +48,38 @@ export function normalizeMusic(raw: unknown): RoomMusic {
   const m = (raw ?? {}) as Record<string, unknown>
   const vol = Number(m.volume)
   const src = m.source as RoomMusic['source']
+  const playing = Boolean(m.playing)
+  const positionSec = Math.max(0, Number(m.position_sec) || 0)
+  const startedAt = Number.isFinite(Number(m.started_at)) && m.started_at !== null ? Number(m.started_at) : null
+  const serverTime = Number(m.server_time)
+  const elapsed =
+    playing && startedAt !== null && Number.isFinite(serverTime) ? Math.max(0, serverTime - startedAt) / 1000 : 0
   return {
     url: (m.url as string) ?? null,
     video_id: (m.video_id ?? m.videoId ?? null) as string | null,
-    playing: Boolean(m.playing),
+    playing,
+    paused: Boolean(m.paused),
     title: (m.title as string) ?? null,
+    author: typeof m.author === 'string' ? m.author : null,
+    thumbnail_url: typeof m.thumbnail_url === 'string' ? m.thumbnail_url : null,
     volume: Number.isFinite(vol) ? Math.max(0, Math.min(100, Math.round(vol))) : 70,
     source: src === 'youtube' || src === 'direct' ? src : null,
     stream_token: (m.stream_token ?? m.streamToken ?? null) as string | null,
     use_host_proxy: m.use_host_proxy !== false && m.useHostProxy !== false,
     proxy_error: (m.proxy_error ?? m.proxyError ?? null) as string | null,
+    position_sec: positionSec,
+    started_at: startedAt,
+    repeat_one: Boolean(m.repeat_one),
+    sync_seq: Number(m.sync_seq) || 0,
+    position_at_receive: positionSec + elapsed,
+    received_at: Date.now(),
   }
+}
+
+/** Где сейчас трек, по локальным часам клиента */
+export function musicPositionNow(music: RoomMusic, now = Date.now()): number {
+  if (!music.playing) return music.position_at_receive
+  return music.position_at_receive + Math.max(0, now - music.received_at) / 1000
 }
 
 export function normalizePoll(raw: unknown): RoomPoll | null {

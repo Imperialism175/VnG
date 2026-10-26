@@ -15,6 +15,9 @@ import { GmPlayerSheets } from '@/components/GmPlayerSheets/GmPlayerSheets'
 import { GmRoomTools } from '@/components/GmTools/GmRoomTools'
 import { RoomPollPanel } from '@/components/Poll/RoomPollPanel'
 import { RoomMusicPlayback } from '@/components/RoomMusic/RoomMusicPlayback'
+import { GmMusicPlayer } from '@/components/RoomMusic/GmMusicPlayer'
+import { MusicPlayerProvider, useMusicPlayer } from '@/components/RoomMusic/MusicPlayerContext'
+import { RoomBoard } from '@/components/Board/RoomBoard'
 import { GmTabBar, PlayerTabBar, type GmTabId, type PlayerTabId } from '@/components/RoomTabs/RoomTabs'
 import { RetroLeaderboard } from '@/components/Leaderboard/RetroLeaderboard'
 import { RoomThemeApplier } from '@/components/RoomTheme/RoomThemeApplier'
@@ -94,7 +97,9 @@ export function GameRoomPage() {
       roomId={roomIdParam}
       initialSession={{ playerId: session.playerId, playerName: session.name, isGm: session.isGm }}
     >
-      <GameRoomContent />
+      <MusicPlayerProvider>
+        <GameRoomContent />
+      </MusicPlayerProvider>
     </RoomProvider>
   )
 }
@@ -111,7 +116,7 @@ function GameRoomContent() {
     setRoomTheme, clearPlayerTheme, setPersonalTheme, clearPersonalTheme,
     allowPlayerThemeEditing, setAllowPlayerThemeEditing,
     levelId, levelVariant, setLevelPreset, showLevelToPlayers, setShowLevelToPlayers,
-    setMusic, startPoll, castVote, endPoll, clearPoll,
+    startPoll, castVote, endPoll, clearPoll,
     showScreenMessage, dismissScreenMessage, setHallOfFame,
     setStageFx, setPlayerFlashlight,
     presence, canRollDice, diceCooldownSec, setHandRaised, pingPlayer,
@@ -134,6 +139,12 @@ function GameRoomContent() {
   const displayTheme = useMemo(() => resolveDisplayTheme(myTheme), [myTheme, cheatTick])
   const bypassDarkness = useMemo(() => shouldBypassDarkness(), [cheatTick])
   const effectiveIsGm = useMemo(() => effectiveGmUi(session.isGm), [session.isGm, cheatTick])
+  const { setOpenPlayerHandler } = useMusicPlayer()
+
+  useEffect(() => {
+    setOpenPlayerHandler(() => setGmTab('music'))
+    return () => setOpenPlayerHandler(null)
+  }, [setOpenPlayerHandler])
   const effectiveViewerIsGm = useMemo(() => effectiveGmVision(session.isGm), [session.isGm, cheatTick])
   const interceptGmMessages = useMemo(() => hasInterceptGmMessages(), [cheatTick])
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -551,6 +562,16 @@ function GameRoomContent() {
                   <DiceRoller onRoll={rollDice} fillHeight {...diceRollerProps} />
                 </div>
               )}
+              {gmTab === 'music' && (
+                <div key="gm-music" className={`${tabPanelClassMobile} vng-retro-tab-content`}>
+                  <GmMusicPlayer music={music} />
+                </div>
+              )}
+              {gmTab === 'board' && (
+                <div key="gm-board" className={`${tabPanelClassMobile} vng-retro-tab-content`}>
+                  <RoomBoard isGm />
+                </div>
+              )}
               {gmTab === 'tops' && topsView}
               {gmTab === 'vote' && voteView}
               {gmTab === 'gm' && (
@@ -559,10 +580,8 @@ function GameRoomContent() {
                     <GmRoomTools
                       players={players}
                       roomTheme={roomTheme}
-                      music={music}
                       onSetTheme={setRoomTheme}
                       onClearPlayerTheme={clearPlayerTheme}
-                      onSetMusic={setMusic}
                       onStartPoll={startPoll}
                       onShowScreenMessage={showScreenMessage}
                       onDismissScreenMessage={dismissScreenMessage}
@@ -604,6 +623,11 @@ function GameRoomContent() {
               {playerTab === 'dice' && (
                 <div key="player-dice" className={`${tabPanelClassMobile} vng-retro-tab-content`}>
                   <DiceRoller onRoll={rollDice} fillHeight {...diceRollerProps} />
+                </div>
+              )}
+              {playerTab === 'board' && (
+                <div key="player-board" className={`${tabPanelClassMobile} vng-retro-tab-content`}>
+                  <RoomBoard isGm={false} />
                 </div>
               )}
               {playerTab === 'tops' && topsView}
