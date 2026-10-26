@@ -2,7 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { DiceThrowPit } from '@/components/DiceRoller/DiceThrowPit'
 import { DiceIcon } from '@/components/icons/DiceIcon'
-import { DICE_TYPES, parseDieValuesFromDetails, randomDieValues } from '@/lib/dice'
+import {
+  DICE_TYPES,
+  INFINITE_DIE,
+  RANGE_DIE_LIMIT,
+  buildRangeExpression,
+  parseDieValuesFromDetails,
+  randomDieValues,
+  randomRangeValues,
+} from '@/lib/dice'
 import type { DiceSides, RollEvent } from '@/types'
 import { Panel } from '@/components/ui/Panel'
 import { Button } from '@/components/ui/Button'
@@ -58,10 +66,16 @@ function toRollDisplay(event: RollEvent, fallbackSides: DiceSides): RollDisplay 
     values,
     total: event.total,
     modifier: event.modifier ?? 0,
-    sides: (event.sides as DiceSides) || fallbackSides,
+    sides: (event.sides as DiceSides | null | undefined) ?? fallbackSides,
     expression: event.expression,
     jackpot: Boolean(event.jackpot),
   }
+}
+
+function parseRangeBound(raw: string): number | null {
+  const n = Number(raw)
+  if (raw.trim() === '' || !Number.isInteger(n) || Math.abs(n) > RANGE_DIE_LIMIT) return null
+  return n
 }
 
 export function DiceRoller({
@@ -83,6 +97,8 @@ export function DiceRoller({
 }: DiceRollerProps) {
   const [selectedSides, setSelectedSides] = useState<DiceSides>(20)
   const [diceCount, setDiceCount] = useState(1)
+  const [rangeMin, setRangeMin] = useState('1')
+  const [rangeMax, setRangeMax] = useState('1000')
   const [rolling, setRolling] = useState(false)
   const [display, setDisplay] = useState<RollDisplay | null>(null)
   const [tumbleValues, setTumbleValues] = useState<number[]>([])
@@ -98,6 +114,12 @@ export function DiceRoller({
   const effectiveStatScaleValues = selectedGmProfile?.statScaleValues ?? statScaleValues
   const effectiveWandererMode = selectedGmProfile?.wandererMode ?? wandererMode
   const isWandererPairMode = selectedSides === 20 && effectiveWandererMode
+  const isInfiniteMode = selectedSides === INFINITE_DIE
+  const parsedRangeMin = parseRangeBound(rangeMin)
+  const parsedRangeMax = parseRangeBound(rangeMax)
+  const rangeValid = parsedRangeMin !== null && parsedRangeMax !== null
+  const rangeLo = rangeValid ? Math.min(parsedRangeMin, parsedRangeMax) : 1
+  const rangeHi = rangeValid ? Math.max(parsedRangeMin, parsedRangeMax) : 1
 
   useEffect(() => {
     if (!isGm) return
@@ -164,6 +186,8 @@ export function DiceRoller({
     const id = window.setInterval(() => {
       if (isWandererPairMode) {
         setTumbleValues([randomDieValues(1, 5)[0], randomDieValues(1, 12)[0]])
+      } else if (isInfiniteMode) {
+        setTumbleValues(randomRangeValues(diceCount, rangeLo, rangeHi))
       } else {
         setTumbleValues(randomDieValues(diceCount, selectedSides))
       }
@@ -171,7 +195,7 @@ export function DiceRoller({
     }, 85)
 
     return () => window.clearInterval(id)
-  }, [rolling, diceCount, selectedSides, isWandererPairMode])
+  }, [rolling, diceCount, selectedSides, isWandererPairMode, isInfiniteMode, rangeLo, rangeHi])
 
   useEffect(() => {
     if (!rolling) return
@@ -185,12 +209,21 @@ export function DiceRoller({
     return () => window.clearTimeout(timeout)
   }, [rolling])
 
-  const rollLocked = disabled || !canRoll || cooldownSec > 0
+  function tumbleFor(): number[] {
+    return isInfiniteMode
+      ? randomRangeValues(diceCount, rangeLo, rangeHi)
+      : randomDieValues(diceCount, selectedSides)
+  }
+
+  const rollLocked = disabled || !canRoll || cooldownSec > 0 || (isInfiniteMode && !rangeValid)
   const blockHint = !canRoll && !isGm
     ? 'ГМ должен разрешить вам бросок (кнопка с кубиком в списке игроков слева).'
     : null
-  const wandererExpression =
-    isWandererPairMode ? '1d5+1d12' : undefined
+  const rollExpression = isWandererPairMode
+    ? '1d5+1d12'
+    : isInfiniteMode
+      ? buildRangeExpression(diceCount, rangeLo, rangeHi)
+      : undefined
 
   function handleRoll() {
     if (rollLocked || rolling) return
@@ -202,12 +235,12 @@ export function DiceRoller({
     if (isWandererPairMode) {
       setTumbleValues([randomDieValues(1, 5)[0], randomDieValues(1, 12)[0]])
     } else {
-      setTumbleValues(randomDieValues(diceCount, selectedSides))
+      setTumbleValues(tumbleFor())
     }
     onRoll({
       count: isWandererPairMode ? 1 : diceCount,
       sides: selectedSides,
-      expression: wandererExpression,
+      expression: rollExpression,
       scaleStatName: scaleStatName || null,
       scaleStatValue: scaleStatValue ?? 0,
       desiredAbilityLevel:
@@ -221,7 +254,7 @@ export function DiceRoller({
       count: diceCount,
       sides: selectedSides,
       modifier: scaleStatValue ?? 0,
-      expression: wandererExpression,
+      expression: rollExpression,
     })
     if (!ok) return
     setRerolling(true)
@@ -232,7 +265,7 @@ export function DiceRoller({
     if (isWandererPairMode) {
       setTumbleValues([randomDieValues(1, 5)[0], randomDieValues(1, 12)[0]])
     } else {
-      setTumbleValues(randomDieValues(diceCount, selectedSides))
+      setTumbleValues(tumbleFor())
     }
   }
 
@@ -244,7 +277,9 @@ export function DiceRoller({
   const readoutExpression =
     isWandererPairMode
       ? `d5 + d12`
-      : `${diceCount}d${selectedSides}`
+      : isInfiniteMode
+        ? `${diceCount}d∞ [${rangeLo}…${rangeHi}]`
+        : `${diceCount}d${selectedSides}`
 
   useEffect(() => {
     if (!scaleStatName) {
@@ -324,6 +359,35 @@ export function DiceRoller({
             />
             {isWandererPairMode && <span className="text-[11px] text-vng-muted">Для бродяги всегда 1 бросок пары d5+d12.</span>}
           </label>
+          {isInfiniteMode && (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs text-vng-muted uppercase tracking-[0.08em]">D∞ мин</span>
+                <input
+                  type="number"
+                  value={rangeMin}
+                  onChange={(e) => setRangeMin(e.target.value)}
+                  disabled={rolling}
+                  className="vng-tui-input"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs text-vng-muted uppercase tracking-[0.08em]">D∞ макс</span>
+                <input
+                  type="number"
+                  value={rangeMax}
+                  onChange={(e) => setRangeMax(e.target.value)}
+                  disabled={rolling}
+                  className="vng-tui-input"
+                />
+              </label>
+              <span className="col-span-2 text-[11px] text-vng-muted">
+                {rangeValid
+                  ? `Каждый куб выдаст целое число от ${rangeLo} до ${rangeHi}.`
+                  : 'Введите целые мин и макс (до ±1 000 000 000).'}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

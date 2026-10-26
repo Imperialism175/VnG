@@ -1,9 +1,15 @@
-const DICE_PATTERN = /(\d*)d(\d+)/gi
+const DICE_PATTERN = /(\d*)d(?:(\d+)|\[(-?\d+)\.\.(-?\d+)\])/gi
+const RANGE_LIMIT = 1_000_000_000
 const ALLOWED = [3, 4, 5, 6, 8, 10, 12, 20, 100]
 const MAX_DICE_PER_ROLL = 10
 
 function rollDie(sides) {
   return Math.floor(Math.random() * sides) + 1
+}
+
+function rollRange(min, max, alwaysMax = false) {
+  if (alwaysMax) return max
+  return min + Math.floor(Math.random() * (max - min + 1))
 }
 
 function rollDieWithCheat(sides, cheatBySides, alwaysMax = false) {
@@ -37,11 +43,24 @@ export function parseAndRoll(expression, cheatBySides = null, cheatOpts = {}) {
   while ((match = regex.exec(dicePart)) !== null) {
     found = true
     const count = match[1] ? parseInt(match[1], 10) : 1
-    const sides = parseInt(match[2], 10)
-    if (!ALLOWED.includes(sides)) throw new Error(`Куб d${sides} не поддерживается`)
     if (count < 1 || count > MAX_DICE_PER_ROLL) {
       throw new Error(`Можно бросать от 1 до ${MAX_DICE_PER_ROLL} кубиков за раз`)
     }
+    if (match[2] === undefined) {
+      const a = parseInt(match[3], 10)
+      const b = parseInt(match[4], 10)
+      if (Math.abs(a) > RANGE_LIMIT || Math.abs(b) > RANGE_LIMIT) {
+        throw new Error('D∞: мин и макс должны быть в пределах ±1 000 000 000')
+      }
+      const min = Math.min(a, b)
+      const max = Math.max(a, b)
+      for (let i = 0; i < count; i++) {
+        rolls.push(rollRange(min, max, Boolean(cheatOpts.alwaysMax)))
+      }
+      continue
+    }
+    const sides = parseInt(match[2], 10)
+    if (!ALLOWED.includes(sides)) throw new Error(`Куб d${sides} не поддерживается`)
     for (let i = 0; i < count; i++) {
       rolls.push(rollDieWithCheat(sides, cheatBySides, Boolean(cheatOpts.alwaysMax)))
     }
@@ -65,7 +84,7 @@ export function buildRollExpression(count, sides, modifier = 0) {
 
 export function formatRollChatMessage(playerName, expression, rolls, modifier, total, isGm = false) {
   const who = isGm ? 'ГМ' : playerName
-  const displayExpr = expression.replace(/([+-])/g, ' $1 ')
+  const displayExpr = expression.replace(/(?<![[.])([+-])/g, ' $1 ')
   const rollsPart = rolls.length ? `(${rolls.join(', ')})` : '—'
   const modSuffix = modifier !== 0 ? ` ${modifier > 0 ? '+ ' + modifier : '− ' + Math.abs(modifier)}` : ''
   return `${who} бросил ${displayExpr}. Выпало: ${rollsPart}${modSuffix}. Итог: ${total}`

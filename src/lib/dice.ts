@@ -32,7 +32,7 @@ export function parseAndRoll(expression: string): DiceRollResult {
       const count = match[1] ? parseInt(match[1], 10) : 1
       const sides = parseInt(match[2], 10)
       if (count < 1 || count > 100) throw new Error('Количество кубов: от 1 до 100')
-      if (![3, 4, 5, 6, 8, 10, 12, 20, 100].includes(sides)) {
+      if (![3, 4, 5, 6, 12, 20, 100].includes(sides)) {
         throw new Error(`Неподдерживаемый куб: d${sides}`)
       }
       for (let i = 0; i < count; i++) {
@@ -84,13 +84,29 @@ export function randomDieValues(count: number, sides: number): number[] {
   return Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1)
 }
 
+export const INFINITE_DIE: DiceSides = 0
+export const RANGE_DIE_LIMIT = 1_000_000_000
+
+/** Выражение для D∞: `2d[5..50]` — каждый куб выдаёт целое от min до max включительно */
+export function buildRangeExpression(count: number, min: number, max: number): string {
+  const lo = Math.min(min, max)
+  const hi = Math.max(min, max)
+  return `${count}d[${lo}..${hi}]`
+}
+
+export function randomRangeValues(count: number, min: number, max: number): number[] {
+  const lo = Math.min(min, max)
+  const hi = Math.max(min, max)
+  return Array.from({ length: count }, () => lo + Math.floor(Math.random() * (hi - lo + 1)))
+}
+
 export const DICE_TYPES: { label: string; sides: DiceSides }[] = [
   { label: 'D3', sides: 3 },
   { label: 'D4', sides: 4 },
+  { label: 'D5', sides: 5 },
   { label: 'D6', sides: 6 },
-  { label: 'D8', sides: 8 },
-  { label: 'D10', sides: 10 },
   { label: 'D12', sides: 12 },
   { label: 'D20', sides: 20 },
   { label: 'D100', sides: 100 },
+  { label: 'D∞', sides: INFINITE_DIE },
 ]

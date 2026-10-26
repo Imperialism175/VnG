@@ -34,6 +34,8 @@ export function getDieFaceShape(sides: DiceSides): {
       return { tag: 'rect', attrs: { x: 18, y: 18, width: 64, height: 64, rx: 4 } }
     case 4:
       return { tag: 'polygon', attrs: { points: '50,12 88,78 12,78' } }
+    case 5:
+      return { tag: 'polygon', attrs: { points: '50,10 88,40 74,90 26,90 12,40' } }
     case 6:
       return { tag: 'polygon', attrs: { points: '50,8 86,28 86,72 50,92 14,72 14,28' } }
     case 8:
@@ -51,6 +53,7 @@ export function getDieFaceShape(sides: DiceSides): {
     case 20:
       return { tag: 'polygon', attrs: { points: '50,5 95,35 80,95 20,95 5,35' } }
     case 100:
+    case 0:
       return { tag: 'circle', attrs: { cx: 50, cy: 50, r: 38 } }
     default:
       return { tag: 'rect', attrs: { x: 20, y: 20, width: 60, height: 60, rx: 4 } }
@@ -61,7 +64,9 @@ export function dieFontSize(value: number, sides: DiceSides): number {
   if (sides === 3) return 30
   const display = formatDieFaceValue(value, sides).main
   const digits = display.length
-  if (sides === 100 || digits >= 3) return 22
+  if (digits >= 7) return 13
+  if (digits >= 5) return 16
+  if (sides === 100 || sides === 0 || digits >= 3) return 22
   if (digits === 2) return 28
   return 34
 }

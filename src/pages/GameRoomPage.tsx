@@ -323,7 +323,7 @@ function GameRoomContent() {
       : [],
     onReroll: effectiveIsGm
       ? undefined
-      : (opts: { count: number; sides: 3 | 4 | 5 | 6 | 8 | 10 | 12 | 20 | 100; modifier: number; expression?: string }) => {
+      : (opts: { count: number; sides: 0 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 20 | 100; modifier: number; expression?: string }) => {
           const char = myCharacter
           if (!char) return false
           const inspiration = char.counters.find((c) => /вдох|inspir/i.test(c.name))

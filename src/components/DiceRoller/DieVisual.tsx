@@ -9,7 +9,7 @@ interface DieVisualProps {
 }
 
 export function DieVisual({ value, sides, rolling, className = '' }: DieVisualProps) {
-  const maxRoll = value === sides
+  const maxRoll = sides !== 0 && value === sides
   const minRoll = value === 1
   const shape = getDieFaceShape(sides)
   const { main, showDot } = formatDieFaceValue(value, sides)
